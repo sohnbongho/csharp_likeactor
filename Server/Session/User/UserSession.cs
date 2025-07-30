@@ -1,33 +1,38 @@
 ﻿using Library.Logger;
 using Library.Network;
 using Messages;
+using Server.ServerWorker.Interface;
 using System.Net.Sockets;
 
 namespace Server.Session.User;
 
-public class UserSession : IDisposable
+public class UserSession : IDisposable, ITickable
 {
+    public ulong SessionId => _sessionId;
+
     private readonly IServerLogger _logger = ServerLoggerFactory.CreateLogger();
     private TcpClient? _client;
     private NetworkStream? _stream;
     private ReceiverHandler? _receiver;
     private SenderHandler? _sender;
+    private readonly ulong _sessionId;    
 
-    public static UserSession Of()
+    public static UserSession Of(ulong sessionId)
     {
-        return new UserSession();
+        return new UserSession(sessionId);
     }
 
-    private UserSession()
+    private UserSession(ulong sessionId)
     {
+        _sessionId = sessionId;
     }
     public void Bind(TcpClient client)
-    {
+    {        
         _receiver = new ReceiverHandler(OnRecvMessage, OnRecvMessageAsync);
         _sender = new SenderHandler();
 
         _client = client;
-        _stream = _client.GetStream();
+        _stream = _client.GetStream();        
     }
 
     public void Dispose()
@@ -52,7 +57,7 @@ public class UserSession : IDisposable
             _client.Close();
             _client.Dispose();
             _client = null;
-        }
+        }        
     }
 
     public async Task RunAsync()
@@ -87,7 +92,7 @@ public class UserSession : IDisposable
     public void OnRecvMessage(MessageWrapper messageWrapper)
     {
         _logger.Debug(() => $"OnRecvMessage type:{messageWrapper.PayloadCase.ToString()}");
-        
+
 
     }
 
@@ -103,11 +108,16 @@ public class UserSession : IDisposable
     {
         if (_sender == null)
             return false;
-        
+
         if (_stream == null)
             return false;
 
         return await _sender.SendAsync(_stream, message);
+    }
+
+    public void Tick()
+    {
+        _logger.Debug(() => $"Tick() SessionId:{SessionId.ToString()}");
     }
 
 }

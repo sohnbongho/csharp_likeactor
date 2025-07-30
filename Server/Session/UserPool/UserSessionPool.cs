@@ -1,4 +1,5 @@
 ﻿using Library.Logger;
+using Server.ServerWorker;
 using Server.Session.User;
 using System.Collections.Concurrent;
 
@@ -14,15 +15,15 @@ public class UserSessionPool : ISessionPool
 {
     private readonly IServerLogger _logger = ServerLoggerFactory.CreateLogger();
     private readonly ConcurrentBag<UserSession> _pool = new();
-    private readonly int _maxSize;
+    private readonly int _maxSize;    
 
     public UserSessionPool(int size)
     {
         _maxSize = size;
 
-        for (int i = 0; i < size; i++)
+        for (ulong i = 0; i < (ulong)size; i++)
         {
-            _pool.Add(UserSession.Of());
+            _pool.Add(UserSession.Of(SessionIdGenerator.Generate()));
         }
 
         _logger.Info(() => $"User Session Pool Size:{size}");

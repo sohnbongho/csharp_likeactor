@@ -1,5 +1,6 @@
 ﻿using Library.ContInfo;
 using Library.Logger;
+using Server.ServerWorker;
 using Server.Session.UserPool;
 using System.Net;
 using System.Net.Sockets;
@@ -12,6 +13,7 @@ public class TcpServer
     private TcpListener _listener = null!;
     private readonly IServerLogger _logger = ServerLoggerFactory.CreateLogger();
     private readonly ISessionPool _sessionPool = new UserSessionPool(SessionConstInfo.MaxUserSessionPoolSize); // 1만개 유저 풀 미리 만들어둠
+    private readonly ThreadPoolManager _threadPoolManager = new ThreadPoolManager(ThreadConstInfo.MaxUserThreadCount); // 4개 스레드
 
     public TcpServer(int port)
     {
@@ -32,10 +34,12 @@ public class TcpServer
 
             var session = _sessionPool.Rent();
             session.Bind(client);
+            _threadPoolManager.Add(session);
 
             _ = session.RunAsync().ContinueWith(t =>
             {
-                _sessionPool.Return(session); // 유저 풀에 반납
+                _threadPoolManager.Remove(session);
+                _sessionPool.Return(session);
             }); // fire-and-forget
         }
     }

@@ -48,7 +48,7 @@ public class UserSession : IDisposable
             if (succeed == false)
                 break;
 
-            await Task.Delay(1000);
+            await Task.Delay(10000);
         }
         return true;
     }
