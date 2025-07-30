@@ -1,4 +1,4 @@
-﻿using Server.Logger;
+﻿using Library.Logger;
 using System.Net.Sockets;
 using System.Text;
 
@@ -45,7 +45,7 @@ public class UserSession
         }
         catch (Exception ex)
         {
-            _logger.Debug($"[오류] 클라이언트 처리 중 예외 발생: {ex.Message}");
+            _logger.Error($"[오류] 클라이언트 처리 중 예외 발생: {ex.Message}");
         }
         finally
         {

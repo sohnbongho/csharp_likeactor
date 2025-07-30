@@ -43,3 +43,9 @@
 Server/bin/*
 Server/obj/*
 Server/.vs/*
+
+DummyClient/bin/*
+DummyClient/obj/*
+
+Library/bin/*
+Library/obj/*

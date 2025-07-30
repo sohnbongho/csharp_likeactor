@@ -1,13 +1,12 @@
 ﻿using System.Runtime.CompilerServices;
 
-namespace Server.Logger;
+namespace Library.Logger;
 
 public static class ServerLoggerFactory
 {
     public static IServerLogger CreateLogger([CallerFilePath] string filePath = "")
     {
-        string className = Path.GetFileNameWithoutExtension(filePath); // "UserSession"
-
+        string className = Path.GetFileNameWithoutExtension(filePath);
         return new ServerLogger(className);
     }
 }

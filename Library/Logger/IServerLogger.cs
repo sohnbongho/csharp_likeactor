@@ -1,4 +1,4 @@
-﻿namespace Server.Logger;
+﻿namespace Library.Logger;
 
 public interface IServerLogger
 {
@@ -16,15 +16,15 @@ public class ServerLogger : IServerLogger
     }
     public void Debug(string message)
     {
-        Console.WriteLine($"[Debug]{_className}:{message}");
+        Console.WriteLine($"{_className}[Debug]{message}");
     }
     public void Info(string message)
     {
-        Console.WriteLine($"[Info]{_className}:{message}");
+        Console.WriteLine($"{_className}[Info]{message}");
     }
 
     public void Error(string message)
     {
-        Console.WriteLine($"[Error]{_className}:{message}");
+        Console.WriteLine($"{_className}[Error]{message}");
     }
 }
