@@ -1,9 +1,8 @@
 ﻿using Library.Logger;
 using Server.Session.User;
 using System.Collections.Concurrent;
-using System.Drawing;
 
-namespace Server.Session.Pool;
+namespace Server.Session.UserPool;
 
 public interface ISessionPool
 {
