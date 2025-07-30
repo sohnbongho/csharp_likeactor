@@ -1,8 +1,6 @@
 ﻿using Library.Logger;
+using Library.Network;
 using Messages;
-using Server.Session.Pool;
-using Server.Session.User.Network;
-using System.IO;
 using System.Net.Sockets;
 
 namespace Server.Session.User;
@@ -11,8 +9,9 @@ public class UserSession : IDisposable
 {
     private readonly IServerLogger _logger = ServerLoggerFactory.CreateLogger();
     private TcpClient? _client;
-    private NetworkStream? _stream;    
+    private NetworkStream? _stream;
     private ReceiverHandler? _receiver;
+    private SenderHandler? _sender;
 
     public static UserSession Of()
     {
@@ -20,13 +19,15 @@ public class UserSession : IDisposable
     }
 
     private UserSession()
-    {        
-        _receiver = new ReceiverHandler(OnHandle, OnHandleAsync);
+    {
     }
     public void Bind(TcpClient client)
     {
+        _receiver = new ReceiverHandler(OnRecvMessage, OnRecvMessageAsync);
+        _sender = new SenderHandler();
+
         _client = client;
-        _stream = _client.GetStream();        
+        _stream = _client.GetStream();
     }
 
     public void Dispose()
@@ -36,7 +37,12 @@ public class UserSession : IDisposable
             _receiver.Dispose();
             _receiver = null;
         }
-        if(_stream != null)
+        if (_sender != null)
+        {
+            _sender.Dispose();
+            _sender = null;
+        }
+        if (_stream != null)
         {
             _stream.Dispose();
             _stream = null;
@@ -78,15 +84,30 @@ public class UserSession : IDisposable
             Dispose();
         }
     }
-    public void OnHandle(MessageWrapper messageWrapper)
+    public void OnRecvMessage(MessageWrapper messageWrapper)
     {
+        _logger.Debug(() => $"OnRecvMessage type:{messageWrapper.PayloadCase.ToString()}");
+        
 
     }
 
-    public Task<bool> OnHandleAsync(MessageWrapper messageWrapper)
+    public async Task<bool> OnRecvMessageAsync(MessageWrapper messageWrapper)
     {
-        return Task.FromResult<bool>(true);
-    }
+        _logger.Debug(() => $"OnRecvMessageAsync type:{messageWrapper.PayloadCase.ToString()}");
 
+        await SendAsync(messageWrapper.Clone());
+
+        return true;
+    }
+    public async Task<bool> SendAsync(MessageWrapper message)
+    {
+        if (_sender == null)
+            return false;
+        
+        if (_stream == null)
+            return false;
+
+        return await _sender.SendAsync(_stream, message);
+    }
 
 }

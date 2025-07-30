@@ -1,4 +1,5 @@
-﻿using Library.Logger;
+﻿using Library.ContInfo;
+using Library.Logger;
 using Server.Session.Pool;
 using System.Net;
 using System.Net.Sockets;
@@ -10,7 +11,7 @@ public class TcpServer
     private readonly int _port;
     private TcpListener _listener = null!;
     private readonly IServerLogger _logger = ServerLoggerFactory.CreateLogger();
-    private readonly ISessionPool _sessionPool = new UserSessionPool(10000); // 1만개 유저 풀 미리 만들어둠
+    private readonly ISessionPool _sessionPool = new UserSessionPool(SessionConstInfo.MaxUserSessionPoolSize); // 1만개 유저 풀 미리 만들어둠
 
     public TcpServer(int port)
     {
