@@ -39,3 +39,7 @@
 
 # debug information files
 *.dwo
+
+Server/bin/*
+Server/obj/*
+Server/.vs/*
