@@ -25,7 +25,7 @@ public class ReceiverHandler : IDisposable
     }
 
     public async Task<bool> OnReceiveAsync(NetworkStream stream)
-    {
+    {        
         byte[] header = new byte[2]; // 헤더를 읽자
         var headerRead = await ReadExactAsync(stream, header, 0, 2);
         if (headerRead == false)

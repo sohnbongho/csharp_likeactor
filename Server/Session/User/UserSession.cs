@@ -1,6 +1,8 @@
 ﻿using Library.Logger;
+using Library.MessageQueue;
 using Library.Network;
 using Messages;
+using Server.Model;
 using Server.ServerWorker.Interface;
 using System.Net.Sockets;
 
@@ -11,28 +13,28 @@ public class UserSession : IDisposable, ITickable
     public ulong SessionId => _sessionId;
 
     private readonly IServerLogger _logger = ServerLoggerFactory.CreateLogger();
-    private TcpClient? _client;
-    private NetworkStream? _stream;
+
     private ReceiverHandler? _receiver;
     private SenderHandler? _sender;
-    private readonly ulong _sessionId;    
+    private UserConnectionSystem? _userConnection;
+    private MessageQueue<IInnerServerMessage>? _messageQueue;
+    private readonly ulong _sessionId;
 
-    public static UserSession Of(ulong sessionId)
-    {
-        return new UserSession(sessionId);
-    }
+    public static UserSession Of(ulong sessionId) => new UserSession(sessionId);
 
     private UserSession(ulong sessionId)
     {
         _sessionId = sessionId;
+
+        // TODO: 이벤트 attribute를 가져오자
+
     }
     public void Bind(TcpClient client)
-    {        
+    {
         _receiver = new ReceiverHandler(OnRecvMessage, OnRecvMessageAsync);
         _sender = new SenderHandler();
-
-        _client = client;
-        _stream = _client.GetStream();        
+        _userConnection = new UserConnectionSystem(client);
+        _messageQueue = new MessageQueue<IInnerServerMessage>();
     }
 
     public void Dispose()
@@ -47,35 +49,36 @@ public class UserSession : IDisposable, ITickable
             _sender.Dispose();
             _sender = null;
         }
-        if (_stream != null)
+        if (_userConnection != null)
         {
-            _stream.Dispose();
-            _stream = null;
+            _userConnection.Dispose();
+            _userConnection = null;
         }
-        if (_client != null)
+
+        if (_messageQueue != null)
         {
-            _client.Close();
-            _client.Dispose();
-            _client = null;
-        }        
+            _messageQueue.Dispose();
+            _messageQueue = null;
+        }
     }
 
     public async Task RunAsync()
     {
-        if (_client == null)
-            return;
-
-        if (_receiver == null)
-            return;
-
-        if (_stream == null)
-            return;
-
         try
         {
+            if (_receiver == null)
+                return;
+
+            if (_userConnection == null)
+                return;
+
+            var stream = _userConnection.Stream;
+            if (stream == null)
+                return;
+
             while (true)
             {
-                var succeed = await _receiver.OnReceiveAsync(_stream);
+                var succeed = await _receiver.OnReceiveAsync(stream);
                 if (succeed == false)
                     break;
             }
@@ -104,20 +107,32 @@ public class UserSession : IDisposable, ITickable
 
         return true;
     }
+
     public async Task<bool> SendAsync(MessageWrapper message)
     {
         if (_sender == null)
             return false;
 
-        if (_stream == null)
+        if (_userConnection == null)
             return false;
 
-        return await _sender.SendAsync(_stream, message);
+        var stream = _userConnection.Stream;
+        if (stream == null)
+            return false;
+
+        return await _sender.SendAsync(stream, message);
     }
 
     public void Tick()
     {
         _logger.Debug(() => $"Tick() SessionId:{SessionId.ToString()}");
+        if (_messageQueue == null)
+            return;
+
+        while (_messageQueue.TryDequeue(out var message))
+        {            
+            // 내부 메시지에 대한 처리 attribute로
+        }
     }
 
 }
