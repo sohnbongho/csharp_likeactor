@@ -2,9 +2,9 @@
 
 public interface IServerLogger
 {
-    void Debug(string message);
-    void Info(string message);
-    void Error(string message);
+    void Debug(Func<string> message);
+    void Info(Func<string> message);
+    void Error(Func<string> message, Exception ex);
 }
 
 public class ServerLogger : IServerLogger
@@ -14,17 +14,17 @@ public class ServerLogger : IServerLogger
     {
         _className = className;
     }
-    public void Debug(string message)
+    public void Debug(Func<string> message)
     {
         Console.WriteLine($"{_className}[Debug]{message}");
     }
-    public void Info(string message)
+    public void Info(Func<string> message)
     {
         Console.WriteLine($"{_className}[Info]{message}");
     }
 
-    public void Error(string message)
+    public void Error(Func<string> message, Exception ex)
     {
-        Console.WriteLine($"{_className}[Error]{message}");
+        Console.WriteLine($"{_className}[Error]{message}{ex.Message}");
     }
 }

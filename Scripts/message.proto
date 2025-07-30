@@ -1,0 +1,53 @@
+syntax = "proto3";
+
+package Messages;
+
+/*****************************************************************
+//
+
+전체 메시지 : 클라이언트와 서버간 모든 메시지는 이곳에 추가하여야 한다.
+구글 프로토 버퍼는 상속 개념이 없기에 패킷을 받는 부분에서 분리를 해야 하기 때문이다.
+
+ProtoBuf의 기본 숫자 타입은 다음과 같습니다:
+int32
+int64
+uint32
+uint64 (Web에서는 double이 최대치이므로(15~17)까지만 지원한다.따라서 19자리가 있는 long은 지원을 안하기에 string으로 변환해서 보내야 한다.)
+sint32 (ZigZag encoding을 사용하여 음수를 효과적으로 인코딩)
+sint64 (ZigZag encoding을 사용하여 음수를 효과적으로 인코딩)
+fixed32 (Always 4 bytes, more efficient than int32 if values are often greater than 2^28.)
+fixed64 (Always 8 bytes)
+sfixed32 (Always 4 bytes)
+sfixed64 (Always 8 bytes)
+
+// DateTime to Timestamp
+DateTime currentDateTime = DateTime.UtcNow;
+Timestamp timestamp = Timestamp.FromDateTime(currentDateTime);
+
+// Timestamp to DateTime
+DateTime convertedDateTime = timestamp.ToDateTime();
+*****************************************************************/
+message MessageWrapper {  
+	int32 message_size = 1;
+	oneof payload {
+		// 필드 번호의 최대값은 2^29-1(=536870911)까지 가능
+		// payload가 수가 많다고 메모리 증가하지 않고 실제 선택된 객체에 따라 크기가 다름
+		ConnectedResponse connected_response = 10;		
+		KeepAliveNoti keep_alive_noti = 11;		
+		KeepAliveRequest keep_alive_request = 12;		
+	}
+}
+
+// 연결 성공
+message ConnectedResponse {  
+  int32 index = 1;  
+}
+
+// 연결 유지
+message KeepAliveNoti {    
+}
+
+// 클라이언트가 연결 유지
+message KeepAliveRequest {    
+}
+

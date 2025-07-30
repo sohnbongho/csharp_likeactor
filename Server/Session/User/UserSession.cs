@@ -1,55 +1,92 @@
 ﻿using Library.Logger;
+using Messages;
+using Server.Session.Pool;
+using Server.Session.User.Network;
+using System.IO;
 using System.Net.Sockets;
-using System.Text;
 
 namespace Server.Session.User;
 
-public class UserSession
+public class UserSession : IDisposable
 {
-    private readonly TcpClient _client;
     private readonly IServerLogger _logger = ServerLoggerFactory.CreateLogger();
+    private TcpClient? _client;
+    private NetworkStream? _stream;    
+    private ReceiverHandler? _receiver;
 
-    public static UserSession Of(TcpClient client)
+    public static UserSession Of()
     {
-        return new UserSession(client);
+        return new UserSession();
     }
 
-    private UserSession(TcpClient client)
+    private UserSession()
+    {        
+        _receiver = new ReceiverHandler(OnHandle, OnHandleAsync);
+    }
+    public void Bind(TcpClient client)
     {
         _client = client;
+        _stream = _client.GetStream();        
+    }
+
+    public void Dispose()
+    {
+        if (_receiver != null)
+        {
+            _receiver.Dispose();
+            _receiver = null;
+        }
+        if(_stream != null)
+        {
+            _stream.Dispose();
+            _stream = null;
+        }
+        if (_client != null)
+        {
+            _client.Close();
+            _client.Dispose();
+            _client = null;
+        }
     }
 
     public async Task RunAsync()
     {
-        using NetworkStream stream = _client.GetStream();
-        byte[] buffer = new byte[4096];
+        if (_client == null)
+            return;
+
+        if (_receiver == null)
+            return;
+
+        if (_stream == null)
+            return;
 
         try
         {
             while (true)
             {
-                int bytesRead = await stream.ReadAsync(buffer, 0, buffer.Length);
-                if (bytesRead == 0)
-                {
-                    _logger.Debug("[연결 종료] 클라이언트가 연결을 끊었습니다.");
+                var succeed = await _receiver.OnReceiveAsync(_stream);
+                if (succeed == false)
                     break;
-                }
-
-                string receivedText = Encoding.UTF8.GetString(buffer, 0, bytesRead);
-                _logger.Debug($"[수신] {receivedText}");
-
-                string response = $"서버 응답: {receivedText}";
-                byte[] responseBytes = Encoding.UTF8.GetBytes(response);
-                await stream.WriteAsync(responseBytes, 0, responseBytes.Length);
             }
         }
         catch (Exception ex)
         {
-            _logger.Error($"[오류] 클라이언트 처리 중 예외 발생: {ex.Message}");
+            _logger.Error(() => $"[오류] 클라이언트 처리 중 예외 발생 ", ex);
         }
         finally
         {
-            _client.Close();
+            Dispose();
         }
     }
+    public void OnHandle(MessageWrapper messageWrapper)
+    {
+
+    }
+
+    public Task<bool> OnHandleAsync(MessageWrapper messageWrapper)
+    {
+        return Task.FromResult<bool>(true);
+    }
+
+
 }
