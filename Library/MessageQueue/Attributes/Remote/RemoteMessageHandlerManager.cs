@@ -1,8 +1,7 @@
-﻿using Library.MessageQueue;
-using Messages;
+﻿using Messages;
 using System.Reflection;
 
-namespace Server.Handler.RemoteAttribute;
+namespace Library.MessageQueue.Attributes.Remote;
 
 public class RemoteMessageHandlerManager
 {
@@ -59,7 +58,5 @@ public class RemoteMessageHandlerManager
     {
         return _asyncHandlers.ContainsKey(type);
     }
-
-
 }
 

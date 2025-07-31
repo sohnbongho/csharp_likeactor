@@ -1,6 +1,5 @@
-﻿namespace Server.Model;
+﻿namespace Library.Model;
 
 public interface IInnerServerMessage
 {
-
 }

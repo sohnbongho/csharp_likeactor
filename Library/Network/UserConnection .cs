@@ -2,13 +2,13 @@
 
 namespace Library.Network;
 
-public class UserConnectionSystem : IDisposable
+public class UserConnectionComponent : IDisposable
 {
     public NetworkStream? Stream => _stream;
     private TcpClient? _client;
     private NetworkStream? _stream;
 
-    public UserConnectionSystem(TcpClient client)
+    public UserConnectionComponent(TcpClient client)
     {
         _client = client;
         _stream = _client.GetStream();

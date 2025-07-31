@@ -1,6 +1,4 @@
-﻿using System;
-
-namespace Server.Handler.InnerAttribute;
+﻿namespace Library.MessageQueue.Attributes.Inner;
 
 [AttributeUsage(AttributeTargets.Class, AllowMultiple = false)]
 public class InnerMessageHandlerAttribute : Attribute

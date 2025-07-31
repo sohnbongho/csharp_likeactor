@@ -17,9 +17,10 @@ public class MessageQueueWorker : IAsyncDisposable
         _processingTask = Task.Run(ProcessLoopAsync);
     }
 
-    public async ValueTask EnqueueAsync(IMessageQueueReceiver receiver, IMessageQueue message)
+    public async Task<bool> EnqueueAsync(IMessageQueueReceiver receiver, IMessageQueue message)
     {
         await _queue.Writer.WriteAsync((receiver, message));
+        return true;
     }
 
     private async Task ProcessLoopAsync()
@@ -46,7 +47,7 @@ public class MessageQueueWorker : IAsyncDisposable
         }
         catch (OperationCanceledException)
         {
-            _logger.Info(() => "[QueueWorker] ");
+            _logger.Info(() => "End QueueWorker ");
         }
     }
 

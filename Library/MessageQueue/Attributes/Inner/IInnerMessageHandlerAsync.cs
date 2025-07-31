@@ -1,7 +1,6 @@
-﻿using Library.MessageQueue;
-using Server.Model;
+﻿using Library.Model;
 
-namespace Server.Handler.InnerAttribute;
+namespace Library.MessageQueue.Attributes.Inner;
 
 public interface IInnerMessageHandlerAsync
 {

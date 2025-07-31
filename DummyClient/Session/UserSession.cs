@@ -81,7 +81,7 @@ public class UserSession : IDisposable, IMessageQueueReceiver
         return true;
     }
 
-    public async Task<bool> EnqueueAsync(IMessageQueue message)
+    public async Task<bool> EnqueueMessageAsync(IMessageQueue message)
     {
         await _messageQueueWorker.EnqueueAsync(this, message);
         return true;

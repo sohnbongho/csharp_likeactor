@@ -1,7 +1,6 @@
-﻿using Library.MessageQueue;
-using Messages;
+﻿using Messages;
 
-namespace Server.Handler.RemoteAttribute;
+namespace Library.MessageQueue.Attributes.Remote;
 
 public interface IRemoteMessageHandler
 {

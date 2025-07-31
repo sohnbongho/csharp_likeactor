@@ -1,10 +1,10 @@
 ﻿using Library.Logger;
 using Library.MessageQueue;
+using Library.MessageQueue.Attributes.Inner;
+using Library.MessageQueue.Attributes.Remote;
 using Library.MessageQueue.Message;
 using Library.Network;
 using Messages;
-using Server.Handler.InnerAttribute;
-using Server.Handler.RemoteAttribute;
 using Server.ServerWorker.Interface;
 using System.Net.Sockets;
 
@@ -19,13 +19,11 @@ public class UserSession : IDisposable, ITickable, IMessageQueueReceiver
     private ReceiverHandler? _receiver;
     private SenderHandler? _sender;
 
-    private UserConnectionSystem? _userConnection;
+    private UserConnectionComponent? _userConnection;
     private readonly MessageQueueWorker _messageQueueWorker;
-    private readonly ulong _sessionId;
-    private readonly InnerMessageHandlerManager _innerMessageHandlers;
-    private readonly RemoteMessageHandlerManager _remoteMessageHandlers;
+    private readonly MessageQueueDispatcher _messageQueueDispatcher;
+    private readonly ulong _sessionId;    
     private bool _disposed;
-
 
     public static UserSession Of(ulong sessionId, MessageQueueWorkerManager manager)
     {
@@ -38,17 +36,15 @@ public class UserSession : IDisposable, ITickable, IMessageQueueReceiver
     private UserSession(ulong sessionId, MessageQueueWorkerManager menager)
     {
         _sessionId = sessionId;
-        _innerMessageHandlers = new();
-        _remoteMessageHandlers = new();
+        _messageQueueDispatcher = new MessageQueueDispatcher();        
 
         var messageQueueWorker = menager.GetWorker(sessionId);
-        _messageQueueWorker = messageQueueWorker;        
+        _messageQueueWorker = messageQueueWorker;
     }
 
     private void RegisterHandlers()
     {
-        _innerMessageHandlers.RegisterHandlers();
-        _remoteMessageHandlers.RegisterHandlers();
+        _messageQueueDispatcher.RegisterHandlers();
     }
 
 
@@ -57,7 +53,7 @@ public class UserSession : IDisposable, ITickable, IMessageQueueReceiver
         _disposed = false;
 
         _receiver = new ReceiverHandler(this, _messageQueueWorker);
-        _userConnection = new UserConnectionSystem(client);
+        _userConnection = new UserConnectionComponent(client);
         _sender = new SenderHandler(this, _messageQueueWorker);
 
         _receiver.SetStream(_userConnection.Stream);
@@ -114,30 +110,10 @@ public class UserSession : IDisposable, ITickable, IMessageQueueReceiver
 
     public async Task<bool> OnRecvMessageAsync(IMessageQueue message)
     {
-        if(_disposed) 
+        if (_disposed)
             return false;
 
-        if (message is RemoteReceiveMessage receiveMessage)
-        {
-            var messageWrapper = receiveMessage.MessageWrapper;
-            if (_remoteMessageHandlers.IsAsync(messageWrapper.PayloadCase))
-            {
-                await _remoteMessageHandlers.OnRecvMessageAsync(this, messageWrapper);
-            }
-            else
-            {
-                _remoteMessageHandlers.OnRecvMessage(this, messageWrapper);
-            }
-        }
-
-        else if (message is RemoteSendMessage sendMessage)
-        {
-            if (_sender != null)
-            {
-                await _sender.SendAsync(sendMessage.MessageWrapper);
-            }
-        }
-        return true;
+        return await _messageQueueDispatcher.OnRecvMessageAsync(this, _sender, message);        
     }
 
     public async Task<bool> SendQueueAsync(MessageWrapper message)
@@ -152,10 +128,10 @@ public class UserSession : IDisposable, ITickable, IMessageQueueReceiver
     {
     }
 
-    public async Task<bool> EnqueueAsync(IMessageQueue message)
+    public async Task<bool> EnqueueMessageAsync(IMessageQueue message)
     {
         await _messageQueueWorker.EnqueueAsync(this, message);
         return true;
     }
-    
+
 }

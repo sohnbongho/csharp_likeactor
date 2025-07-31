@@ -1,10 +1,10 @@
 ﻿using Library.Logger;
 using Library.MessageQueue;
+using Library.MessageQueue.Attributes.Remote;
 using Library.MessageQueue.Message;
 using Messages;
-using Server.Handler.RemoteAttribute;
 
-namespace Server.Actors.User.Handler.Network;
+namespace Server.Actors.User.Handler.Remote;
 
 
 [RemoteMessageHandlerAsyncAttribute(MessageWrapper.PayloadOneofCase.KeepAliveRequest)]
@@ -15,14 +15,17 @@ public class KeepAliveRequestHandler : IRemoteMessageHandlerAsync
     {
         _logger.Debug(() => $"KeepAliveRequestHandler");
 
-        var messageWrapper = new MessageWrapper
         {
-            KeepAliveNoti = new KeepAliveNoti()
-        };
-        await receiver.EnqueueAsync(new RemoteSendMessage
-        {
-            MessageWrapper = messageWrapper,
-        });
+            var messageWrapper = new MessageWrapper
+            {
+                KeepAliveNoti = new KeepAliveNoti()
+            };
+            await receiver.EnqueueMessageAsync(new RemoteSendMessage
+            {
+                MessageWrapper = messageWrapper,
+            });
+        }
+
         return true;
     }
 }

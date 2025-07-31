@@ -1,7 +1,6 @@
 ﻿using Messages;
-using System;
 
-namespace Server.Handler.RemoteAttribute;
+namespace Library.MessageQueue.Attributes.Remote;
 
 [AttributeUsage(AttributeTargets.Class, AllowMultiple = false)]
 public class RemoteMessageHandlerAttribute : Attribute

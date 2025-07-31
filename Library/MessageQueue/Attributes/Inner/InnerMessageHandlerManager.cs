@@ -1,8 +1,7 @@
-﻿using Library.MessageQueue;
-using Messages;
+﻿using Library.Model;
 using System.Reflection;
 
-namespace Server.Handler.InnerAttribute;
+namespace Library.MessageQueue.Attributes.Inner;
 
 public class InnerMessageHandlerManager
 {
@@ -10,7 +9,7 @@ public class InnerMessageHandlerManager
     private readonly Dictionary<Type, IInnerMessageHandlerAsync> _asyncHandlers = new();
 
     public InnerMessageHandlerManager()
-    {        
+    {
     }
 
     public void RegisterHandlers()
@@ -33,6 +32,31 @@ public class InnerMessageHandlerManager
                     _asyncHandlers[attr.MessageType] = (IInnerMessageHandlerAsync)Activator.CreateInstance(type)!;
             }
         }
-    }    
+    }
+    public async Task<bool> OnRecvMessageAsync(IMessageQueueReceiver receiver, IInnerServerMessage message)
+    {
+        var messageType = message.GetType();
+        if (_asyncHandlers.TryGetValue(messageType, out var handler))
+        {
+            return await handler.HandleAsync(receiver, message);
+        }
+
+        return true;
+    }
+    public bool OnRecvMessage(IMessageQueueReceiver receiver, IInnerServerMessage message)
+    {
+        var messageType = message.GetType();
+        if (_syncHandlers.TryGetValue(messageType, out var handler))
+        {
+            return handler.Handle(receiver, message);
+        }
+        return true;
+    }
+
+    public bool IsAsync(IInnerServerMessage message)
+    {
+        var messageType = message.GetType();
+        return _asyncHandlers.ContainsKey(messageType);
+    }
 }
 
