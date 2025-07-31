@@ -35,7 +35,9 @@ public class UserSession : IDisposable, IMessageQueueReceiver
     {
         await _client.ConnectAsync(host, port);
         _stream = _client.GetStream();
+
         _sender.SetStream(_stream);
+        _receiver.SetStream(_stream);
     }
 
     public async Task<bool> StartEcho()
@@ -49,7 +51,7 @@ public class UserSession : IDisposable, IMessageQueueReceiver
             await _sender.AddQueueAsync(message);
             _logger.Debug(() => $"[송신] KeepAliveRequest #{++_counter} 전송");
 
-            var succeed = await _receiver.OnReceiveAsync(_stream);
+            var succeed = await _receiver.OnReceiveAsync();
             if (succeed == false)
                 break;
 
@@ -66,18 +68,24 @@ public class UserSession : IDisposable, IMessageQueueReceiver
     public async Task<bool> OnRecvMessageAsync(IMessageQueue message)
     {
         if (message is RemoteReceiveMessage receiveMessage)
-        {            
+        {
+            OnRecvMessage(receiveMessage.MessageWrapper);
         }
-        else if (message is RemoteReceiveMessageAsync receiveMessageAsync)
-        {            
-        }
-        else if (message is RemoteSendMessageAsync sendMessage)
+        else if (message is RemoteSendMessage sendMessage)
         {
             if (_sender != null)
             {
-                await _sender.SendAsync(sendMessage.Message);
+                await _sender.SendAsync(sendMessage.MessageWrapper);
             }
         }
         return true;
     }
+
+    public async Task<bool> EnqueueAsync(IMessageQueue message)
+    {
+        await _messageQueueWorker.EnqueueAsync(this, message);
+        return true;
+    }
+
+    
 }

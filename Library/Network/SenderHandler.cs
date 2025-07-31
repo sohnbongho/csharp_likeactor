@@ -33,9 +33,9 @@ public class SenderHandler : IDisposable
     }
     public async Task<bool> AddQueueAsync(MessageWrapper message)
     {
-        await _messageQueueWorker.EnqueueAsync(_receiver, new RemoteSendMessageAsync
+        await _messageQueueWorker.EnqueueAsync(_receiver, new RemoteSendMessage
         {
-            Message = message
+            MessageWrapper = message
         });
         return true;
     }

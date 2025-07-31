@@ -1,9 +1,8 @@
 ﻿using Library.Logger;
 using Library.MessageQueue;
+using Library.MessageQueue.Message;
 using Messages;
-using Server.Handler;
 using Server.Handler.RemoteAttribute;
-using Server.Model;
 
 namespace Server.Actors.User.Handler.Network;
 
@@ -14,7 +13,16 @@ public class KeepAliveRequestHandler : IRemoteMessageHandlerAsync
     private readonly IServerLogger _logger = ServerLoggerFactory.CreateLogger();
     public async Task<bool> HandleAsync(IMessageQueueReceiver receiver, MessageWrapper message)
     {
-        _logger.Debug(() => $"KeepAliveRequestHandler");        
+        _logger.Debug(() => $"KeepAliveRequestHandler");
+
+        var messageWrapper = new MessageWrapper
+        {
+            KeepAliveNoti = new KeepAliveNoti()
+        };
+        await receiver.EnqueueAsync(new RemoteSendMessage
+        {
+            MessageWrapper = messageWrapper,
+        });
         return true;
     }
 }

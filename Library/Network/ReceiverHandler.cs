@@ -9,31 +9,37 @@ namespace Library.Network;
 
 public class ReceiverHandler : IDisposable
 {
-    private readonly IServerLogger _logger = ServerLoggerFactory.CreateLogger();
-    private Func<MessageWrapper.PayloadOneofCase, bool>? _messageAsyncChecker;
+    private readonly IServerLogger _logger = ServerLoggerFactory.CreateLogger();    
     private readonly MessageQueueWorker _messageQueueWorker;
     private readonly IMessageQueueReceiver _receiver;
 
     private byte[] _receiveBuffer;
+    private NetworkStream? _stream;
 
     public ReceiverHandler(IMessageQueueReceiver receiver,
-        MessageQueueWorker messageQueueWorker,
-        Func<MessageWrapper.PayloadOneofCase, bool>? messageAsyncChecker = null,
+        MessageQueueWorker messageQueueWorker,        
         int bufferSize = SessionConstInfo.MaxBufferSize)
     {
         _receiver = receiver;
-        _receiveBuffer = new byte[bufferSize];
-        _messageAsyncChecker = messageAsyncChecker;
+        _receiveBuffer = new byte[bufferSize];        
         _messageQueueWorker = messageQueueWorker;
     }
     public void Dispose()
     {
+        _stream = null;
+    }
+    public void SetStream(NetworkStream? stream)
+    {
+        _stream = stream;
     }
 
-    public async Task<bool> OnReceiveAsync(NetworkStream stream)
+    public async Task<bool> OnReceiveAsync()
     {
+        if (_stream == null)
+            return false;
+
         byte[] header = new byte[2]; // 헤더를 읽자
-        var headerRead = await ReadExactAsync(stream, header, 0, 2);
+        var headerRead = await ReadExactAsync(_stream, header, 0, 2);
         if (headerRead == false)
         {
             _logger.Debug(() => "[연결 종료] 클라이언트가 연결을 끊었습니다.");
@@ -49,7 +55,7 @@ public class ReceiverHandler : IDisposable
         try
         {
             // 정확히 bodyLength만큼 읽기
-            bool bodyRead = await ReadExactAsync(stream, _receiveBuffer, 0, bodyLength);
+            bool bodyRead = await ReadExactAsync(_stream, _receiveBuffer, 0, bodyLength);
             if (!bodyRead)
             {
                 _logger.Debug(() => "[연결 종료] 메시지 수신 중 끊김");
@@ -91,21 +97,11 @@ public class ReceiverHandler : IDisposable
         {
             // protobuf 메시지 파싱
             var message = MessageWrapper.Parser.ParseFrom(data.Span);
-            if (_messageAsyncChecker != null && _messageAsyncChecker(message.PayloadCase))
+            await _messageQueueWorker.EnqueueAsync(_receiver, new RemoteReceiveMessage
             {
-                await _messageQueueWorker.EnqueueAsync(_receiver, new RemoteReceiveMessageAsync
-                {
-                    Message = message,
+                MessageWrapper = message,
+            });
 
-                });
-            }
-            else
-            {
-                await _messageQueueWorker.EnqueueAsync(_receiver, new RemoteReceiveMessage
-                {
-                    Message = message,
-                });
-            }
             return true;
         }
         catch (Exception ex)
@@ -114,4 +110,5 @@ public class ReceiverHandler : IDisposable
             return false;
         }
     }
+
 }

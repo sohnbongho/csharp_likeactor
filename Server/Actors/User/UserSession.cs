@@ -5,7 +5,6 @@ using Library.Network;
 using Messages;
 using Server.Handler.InnerAttribute;
 using Server.Handler.RemoteAttribute;
-using Server.Model;
 using Server.ServerWorker.Interface;
 using System.Net.Sockets;
 
@@ -25,6 +24,7 @@ public class UserSession : IDisposable, ITickable, IMessageQueueReceiver
     private readonly ulong _sessionId;
     private readonly InnerMessageHandlerManager _innerMessageHandlers;
     private readonly RemoteMessageHandlerManager _remoteMessageHandlers;
+    private bool _disposed;
 
 
     public static UserSession Of(ulong sessionId, MessageQueueWorkerManager manager)
@@ -42,7 +42,7 @@ public class UserSession : IDisposable, ITickable, IMessageQueueReceiver
         _remoteMessageHandlers = new();
 
         var messageQueueWorker = menager.GetWorker(sessionId);
-        _messageQueueWorker = messageQueueWorker;
+        _messageQueueWorker = messageQueueWorker;        
     }
 
     private void RegisterHandlers()
@@ -54,9 +54,13 @@ public class UserSession : IDisposable, ITickable, IMessageQueueReceiver
 
     public void Bind(TcpClient client)
     {
-        _receiver = new ReceiverHandler(this, _messageQueueWorker, _remoteMessageHandlers.IsAsync);
+        _disposed = false;
+
+        _receiver = new ReceiverHandler(this, _messageQueueWorker);
         _userConnection = new UserConnectionSystem(client);
         _sender = new SenderHandler(this, _messageQueueWorker);
+
+        _receiver.SetStream(_userConnection.Stream);
         _sender.SetStream(_userConnection.Stream);
     }
 
@@ -79,6 +83,7 @@ public class UserSession : IDisposable, ITickable, IMessageQueueReceiver
             _userConnection.Dispose();
             _userConnection = null;
         }
+        _disposed = true;
     }
     public async Task RunAsync()
     {
@@ -90,20 +95,16 @@ public class UserSession : IDisposable, ITickable, IMessageQueueReceiver
             if (_userConnection == null)
                 return;
 
-            var stream = _userConnection.Stream;
-            if (stream == null)
-                return;
-
             while (true)
             {
-                var succeed = await _receiver.OnReceiveAsync(stream);
+                var succeed = await _receiver.OnReceiveAsync();
                 if (succeed == false)
                     break;
             }
         }
         catch (Exception ex)
         {
-            _logger.Error(() => $"[오류] 클라이언트 처리 중 예외 발생 ", ex);
+            _logger.Error(() => $"fail RunAsync", ex);
         }
         finally
         {
@@ -113,20 +114,28 @@ public class UserSession : IDisposable, ITickable, IMessageQueueReceiver
 
     public async Task<bool> OnRecvMessageAsync(IMessageQueue message)
     {
+        if(_disposed) 
+            return false;
+
         if (message is RemoteReceiveMessage receiveMessage)
         {
-            _remoteMessageHandlers.OnRecvMessage(this, receiveMessage.Message);
+            var messageWrapper = receiveMessage.MessageWrapper;
+            if (_remoteMessageHandlers.IsAsync(messageWrapper.PayloadCase))
+            {
+                await _remoteMessageHandlers.OnRecvMessageAsync(this, messageWrapper);
+            }
+            else
+            {
+                _remoteMessageHandlers.OnRecvMessage(this, messageWrapper);
+            }
         }
-        else if (message is RemoteReceiveMessageAsync receiveMessageAsync)
-        {
-            await _remoteMessageHandlers.OnRecvMessageAsync(this, receiveMessageAsync.Message);
-        }
-        else if (message is RemoteSendMessageAsync sendMessage)
+
+        else if (message is RemoteSendMessage sendMessage)
         {
             if (_sender != null)
             {
-                await _sender.SendAsync(sendMessage.Message);
-            }            
+                await _sender.SendAsync(sendMessage.MessageWrapper);
+            }
         }
         return true;
     }
@@ -143,9 +152,10 @@ public class UserSession : IDisposable, ITickable, IMessageQueueReceiver
     {
     }
 
-    public void OnRecvMessageHandle(IInnerServerMessage message)
+    public async Task<bool> EnqueueAsync(IMessageQueue message)
     {
+        await _messageQueueWorker.EnqueueAsync(this, message);
+        return true;
     }
-
-
+    
 }

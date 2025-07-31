@@ -8,16 +8,12 @@ public interface IMessageQueue
 }
 public class RemoteReceiveMessage : IMessageQueue
 {
-    public MessageWrapper Message { get; set; } = null!;
-
-}
-public class RemoteReceiveMessageAsync : IMessageQueue
-{
-    public MessageWrapper Message { get; set; } = null!;
+    public MessageWrapper MessageWrapper { get; set; } = null!;
 
 }
 
-public class RemoteSendMessageAsync : IMessageQueue
+
+public class RemoteSendMessage : IMessageQueue
 {
-    public MessageWrapper Message { get; set; } = null!;
+    public MessageWrapper MessageWrapper { get; set; } = null!;
 }
