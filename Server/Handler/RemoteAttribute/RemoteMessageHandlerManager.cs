@@ -1,4 +1,5 @@
-﻿using Messages;
+﻿using Library.MessageQueue;
+using Messages;
 using System.Reflection;
 
 namespace Server.Handler.RemoteAttribute;
@@ -34,7 +35,7 @@ public class RemoteMessageHandlerManager
         }
     }
 
-    public async Task<bool> OnRecvMessageAsync(IMessageReceiver receiver, MessageWrapper message)
+    public async Task<bool> OnRecvMessageAsync(IMessageQueueReceiver receiver, MessageWrapper message)
     {
         var payloadCase = message.PayloadCase;
         if (_asyncHandlers.TryGetValue(payloadCase, out var handler))
@@ -44,7 +45,7 @@ public class RemoteMessageHandlerManager
 
         return true;
     }
-    public bool OnRecvMessage(IMessageReceiver receiver, MessageWrapper message)
+    public bool OnRecvMessage(IMessageQueueReceiver receiver, MessageWrapper message)
     {
         var payloadCase = message.PayloadCase;
         if (_syncHandlers.TryGetValue(payloadCase, out var handler))

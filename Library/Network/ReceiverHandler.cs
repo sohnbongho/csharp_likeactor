@@ -1,56 +1,33 @@
 ﻿using Library.ContInfo;
 using Library.Logger;
+using Library.MessageQueue;
+using Library.MessageQueue.Message;
 using Messages;
 using System.Net.Sockets;
-using System.Threading.Channels;
 
 namespace Library.Network;
 
 public class ReceiverHandler : IDisposable
 {
     private readonly IServerLogger _logger = ServerLoggerFactory.CreateLogger();
-    private Action<MessageWrapper>? _onMessage;
-    private Func<MessageWrapper, Task<bool>>? _onMessageAsync;
     private Func<MessageWrapper.PayloadOneofCase, bool>? _messageAsyncChecker;
+    private readonly MessageQueueWorker _messageQueueWorker;
+    private readonly IMessageQueueReceiver _receiver;
 
-    private readonly Channel<MessageWrapper> _receiveQueue = Channel.CreateUnbounded<MessageWrapper>();
-    private readonly CancellationTokenSource _cts = new();
-    private Task? _processingTask;
     private byte[] _receiveBuffer;
 
-    public ReceiverHandler(Action<MessageWrapper>? onMessage = null,
-        Func<MessageWrapper, Task<bool>>? onMessageAsync = null,
+    public ReceiverHandler(IMessageQueueReceiver receiver,
+        MessageQueueWorker messageQueueWorker,
         Func<MessageWrapper.PayloadOneofCase, bool>? messageAsyncChecker = null,
         int bufferSize = SessionConstInfo.MaxBufferSize)
     {
+        _receiver = receiver;
         _receiveBuffer = new byte[bufferSize];
-        _onMessage = onMessage;
-        _onMessageAsync = onMessageAsync;
         _messageAsyncChecker = messageAsyncChecker;
-
-        _processingTask = StartProcessingAsync(_cts.Token); // 메시지 처리 루프 시작
-    }
-    public async Task StopAsync()
-    {
-        _cts.Cancel();
-
-        if (_processingTask != null)
-        {
-            try
-            {
-                await _processingTask;
-            }
-            catch (OperationCanceledException)
-            {
-                // 무시해도 됨
-            }
-            _processingTask = null;
-        }
+        _messageQueueWorker = messageQueueWorker;
     }
     public void Dispose()
     {
-        _cts.Cancel();
-        _receiveQueue.Writer.Complete();
     }
 
     public async Task<bool> OnReceiveAsync(NetworkStream stream)
@@ -114,43 +91,27 @@ public class ReceiverHandler : IDisposable
         {
             // protobuf 메시지 파싱
             var message = MessageWrapper.Parser.ParseFrom(data.Span);
-            await _receiveQueue.Writer.WriteAsync(message); // 큐에 메시지 삽입
+            if (_messageAsyncChecker != null && _messageAsyncChecker(message.PayloadCase))
+            {
+                await _messageQueueWorker.EnqueueAsync(_receiver, new RemoteReceiveMessageAsync
+                {
+                    Message = message,
 
+                });
+            }
+            else
+            {
+                await _messageQueueWorker.EnqueueAsync(_receiver, new RemoteReceiveMessage
+                {
+                    Message = message,
+                });
+            }
             return true;
         }
         catch (Exception ex)
         {
             _logger.Error(() => $"[ReceiverHandler 오류] ", ex);
             return false;
-        }
-    }
-    private async Task StartProcessingAsync(CancellationToken token)
-    {
-        try
-        {
-            while (await _receiveQueue.Reader.WaitToReadAsync(token))
-            {
-                while (_receiveQueue.Reader.TryRead(out var message))
-                {
-                    if (_messageAsyncChecker?.Invoke(message.PayloadCase) == true)
-                    {
-                        if (_onMessageAsync != null)
-                            await _onMessageAsync(message);
-                    }
-                    else if(_onMessage != null)
-                    {
-                        _onMessage(message);
-                    }                    
-                }
-            }
-        }
-        catch (OperationCanceledException)
-        {
-            _logger.Debug(() => "[ReceiverHandler] 취소됨");
-        }
-        catch (Exception ex)
-        {
-            _logger.Error(() => $"[ReceiverHandler 처리 오류]", ex);
         }
     }
 }

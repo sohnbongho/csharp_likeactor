@@ -5,6 +5,7 @@ using Server.ServerWorker;
 using Server.Actors.User;
 using System.Net;
 using System.Net.Sockets;
+using Library.MessageQueue;
 
 namespace Server;
 
@@ -15,13 +16,14 @@ public class TcpServer
     private readonly IServerLogger _logger = ServerLoggerFactory.CreateLogger();
     private readonly IObjectPool<UserSession> _userSessionPool;
     private readonly ThreadPoolManager _threadPoolManager = new ThreadPoolManager(ThreadConstInfo.MaxUserThreadCount); // 4개 스레드
+    private readonly MessageQueueWorkerManager _messageQueueWorkerManager = new MessageQueueWorkerManager(ThreadConstInfo.MaxMessageQueueWorkerCount); // 4개 스레드
 
     public TcpServer(int port)
     {
         _port = port;
         _userSessionPool = new ObjectPool<UserSession>(
             SessionConstInfo.MaxUserSessionPoolSize,
-            () => UserSession.Of(SessionIdGenerator.Generate()));
+            () => UserSession.Of(SessionIdGenerator.Generate(), _messageQueueWorkerManager));
     }
 
     public async Task StartAsync()
@@ -45,7 +47,8 @@ public class TcpServer
                 _threadPoolManager.Remove(session);
                 _userSessionPool.Return(session);
             }); // fire-and-forget
-        }
+        }        
     }
+    
 }
 

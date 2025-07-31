@@ -1,8 +1,8 @@
 ﻿using Library.Logger;
 using Library.MessageQueue;
+using Library.MessageQueue.Message;
 using Library.Network;
 using Messages;
-using Server.Handler;
 using Server.Handler.InnerAttribute;
 using Server.Handler.RemoteAttribute;
 using Server.Model;
@@ -11,7 +11,7 @@ using System.Net.Sockets;
 
 namespace Server.Actors.User;
 
-public class UserSession : IAsyncDisposable, ITickable, IMessageReceiver
+public class UserSession : IDisposable, ITickable, IMessageQueueReceiver
 {
     public ulong SessionId => _sessionId;
 
@@ -19,27 +19,32 @@ public class UserSession : IAsyncDisposable, ITickable, IMessageReceiver
 
     private ReceiverHandler? _receiver;
     private SenderHandler? _sender;
+
     private UserConnectionSystem? _userConnection;
-    private MessageQueue<IInnerServerMessage>? _messageQueue;
+    private readonly MessageQueueWorker _messageQueueWorker;
     private readonly ulong _sessionId;
     private readonly InnerMessageHandlerManager _innerMessageHandlers;
     private readonly RemoteMessageHandlerManager _remoteMessageHandlers;
 
-    public static UserSession Of(ulong sessionId)
+
+    public static UserSession Of(ulong sessionId, MessageQueueWorkerManager manager)
     {
-        var user = new UserSession(sessionId);
+        var user = new UserSession(sessionId, manager);
         user.RegisterHandlers();
 
         return user;
     }
 
-
-    private UserSession(ulong sessionId)
+    private UserSession(ulong sessionId, MessageQueueWorkerManager menager)
     {
         _sessionId = sessionId;
         _innerMessageHandlers = new();
         _remoteMessageHandlers = new();
+
+        var messageQueueWorker = menager.GetWorker(sessionId);
+        _messageQueueWorker = messageQueueWorker;
     }
+
     private void RegisterHandlers()
     {
         _innerMessageHandlers.RegisterHandlers();
@@ -49,18 +54,17 @@ public class UserSession : IAsyncDisposable, ITickable, IMessageReceiver
 
     public void Bind(TcpClient client)
     {
-        _receiver = new ReceiverHandler(OnRecvMessage, OnRecvMessageAsync, _remoteMessageHandlers.IsAsync);
-        _sender = new SenderHandler();
+        _receiver = new ReceiverHandler(this, _messageQueueWorker, _remoteMessageHandlers.IsAsync);
         _userConnection = new UserConnectionSystem(client);
-        _messageQueue = new MessageQueue<IInnerServerMessage>();
+        _sender = new SenderHandler(this, _messageQueueWorker);
+        _sender.SetStream(_userConnection.Stream);
     }
 
-    
-    public async ValueTask DisposeAsync()
+
+    public void Dispose()
     {
         if (_receiver != null)
         {
-            await _receiver.StopAsync();
             _receiver.Dispose();
             _receiver = null;
         }
@@ -69,16 +73,11 @@ public class UserSession : IAsyncDisposable, ITickable, IMessageReceiver
             _sender.Dispose();
             _sender = null;
         }
+
         if (_userConnection != null)
         {
             _userConnection.Dispose();
             _userConnection = null;
-        }
-
-        if (_messageQueue != null)
-        {
-            _messageQueue.Dispose();
-            _messageQueue = null;
         }
     }
     public async Task RunAsync()
@@ -108,52 +107,45 @@ public class UserSession : IAsyncDisposable, ITickable, IMessageReceiver
         }
         finally
         {
-            await DisposeAsync();
+            Dispose();
         }
     }
-    public void OnRecvMessage(MessageWrapper messageWrapper)
-    {
-        _logger.Debug(() => $"OnRecvMessage type:{messageWrapper.PayloadCase.ToString()}");
-        _remoteMessageHandlers.OnRecvMessage(this, messageWrapper);
 
+    public async Task<bool> OnRecvMessageAsync(IMessageQueue message)
+    {
+        if (message is RemoteReceiveMessage receiveMessage)
+        {
+            _remoteMessageHandlers.OnRecvMessage(this, receiveMessage.Message);
+        }
+        else if (message is RemoteReceiveMessageAsync receiveMessageAsync)
+        {
+            await _remoteMessageHandlers.OnRecvMessageAsync(this, receiveMessageAsync.Message);
+        }
+        else if (message is RemoteSendMessageAsync sendMessage)
+        {
+            if (_sender != null)
+            {
+                await _sender.SendAsync(sendMessage.Message);
+            }            
+        }
+        return true;
     }
 
-    public async Task<bool> OnRecvMessageAsync(MessageWrapper messageWrapper)
-    {
-        _logger.Debug(() => $"OnRecvMessageAsync type:{messageWrapper.PayloadCase.ToString()}");
-        return await _remoteMessageHandlers.OnRecvMessageAsync(this, messageWrapper);
-    }
-
-    public async Task<bool> SendAsync(MessageWrapper message)
+    public async Task<bool> SendQueueAsync(MessageWrapper message)
     {
         if (_sender == null)
             return false;
 
-        if (_userConnection == null)
-            return false;
-
-        var stream = _userConnection.Stream;
-        if (stream == null)
-            return false;
-
-        return await _sender.SendAsync(stream, message);
+        return await _sender.AddQueueAsync(message);
     }
 
     public void Tick()
-    {        
-        if (_messageQueue == null)
-            return;
-
-        while (_messageQueue.TryDequeue(out var message))
-        {
-            // 내부 메시지에 대한 처리 attribute로
-
-        }
+    {
     }
 
     public void OnRecvMessageHandle(IInnerServerMessage message)
     {
     }
 
-    
+
 }

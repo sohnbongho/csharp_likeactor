@@ -11,9 +11,4 @@
     <ProjectReference Include="..\Library\Library.csproj" />
   </ItemGroup>
 
-  <ItemGroup>
-    <Folder Include="Actors\User\Handler\Async\" />
-    <Folder Include="Actors\User\Handler\Sync\" />
-  </ItemGroup>
-
 </Project>

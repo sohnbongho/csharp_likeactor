@@ -1,18 +1,19 @@
-﻿using Server.Model;
+﻿using Library.MessageQueue;
+using Server.Model;
 
 namespace Server.Handler.InnerAttribute;
 
 public class InnerMessageDispatcher
 {
     private readonly InnerMessageHandlerManager _handlerManager;
-    private readonly Queue<(IMessageReceiver receiver, IInnerServerMessage message)> _queue = new();
+    private readonly Queue<(IMessageQueueReceiver receiver, IInnerServerMessage message)> _queue = new();
 
     public InnerMessageDispatcher(InnerMessageHandlerManager handlerManager)
     {
         _handlerManager = handlerManager;
     }
 
-    public void Enqueue(IMessageReceiver receiver, IInnerServerMessage message)
+    public void Enqueue(IMessageQueueReceiver receiver, IInnerServerMessage message)
     {
         lock (_queue)
             _queue.Enqueue((receiver, message));
@@ -20,11 +21,11 @@ public class InnerMessageDispatcher
 
     public async Task TickAsync()
     {
-        Queue<(IMessageReceiver, IInnerServerMessage)> snapshot;
+        Queue<(IMessageQueueReceiver, IInnerServerMessage)> snapshot;
 
         lock (_queue)
         {
-            snapshot = new Queue<(IMessageReceiver, IInnerServerMessage)>(_queue);
+            snapshot = new Queue<(IMessageQueueReceiver, IInnerServerMessage)>(_queue);
             _queue.Clear();
         }
 

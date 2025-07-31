@@ -1,9 +1,10 @@
-﻿using Messages;
+﻿using Library.MessageQueue;
+using Messages;
 
 namespace Server.Handler.RemoteAttribute;
 
 public interface IRemoteMessageHandler
 {
-    bool Handle(IMessageReceiver receiver, MessageWrapper message);
+    bool Handle(IMessageQueueReceiver receiver, MessageWrapper message);
 }
 

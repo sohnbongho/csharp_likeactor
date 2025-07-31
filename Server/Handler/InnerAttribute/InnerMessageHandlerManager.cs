@@ -1,17 +1,8 @@
-﻿using Server.Model;
+﻿using Library.MessageQueue;
+using Messages;
 using System.Reflection;
 
 namespace Server.Handler.InnerAttribute;
-
-public interface IInnerMessageHandler
-{
-    bool Handle(IMessageReceiver receiver, IInnerServerMessage message);
-}
-
-public interface IInnerMessageHandlerAsync
-{
-    Task<bool> HandleAsync(IMessageReceiver receiver, IInnerServerMessage message);
-}
 
 public class InnerMessageHandlerManager
 {
