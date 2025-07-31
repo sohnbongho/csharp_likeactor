@@ -1,9 +1,8 @@
 ﻿using Library.Logger;
 using Library.MessageQueue;
-using Library.MessageQueue.Attributes.Inner;
-using Library.MessageQueue.Attributes.Remote;
 using Library.MessageQueue.Message;
 using Library.Network;
+using Library.Timer;
 using Messages;
 using Server.ServerWorker.Interface;
 using System.Net.Sockets;
@@ -22,7 +21,8 @@ public class UserSession : IDisposable, ITickable, IMessageQueueReceiver
     private UserConnectionComponent? _userConnection;
     private readonly MessageQueueWorker _messageQueueWorker;
     private readonly MessageQueueDispatcher _messageQueueDispatcher;
-    private readonly ulong _sessionId;    
+    private readonly TimerScheduleManager _timerScheduleManager;
+    private readonly ulong _sessionId;
     private bool _disposed;
 
     public static UserSession Of(ulong sessionId, MessageQueueWorkerManager manager)
@@ -36,7 +36,8 @@ public class UserSession : IDisposable, ITickable, IMessageQueueReceiver
     private UserSession(ulong sessionId, MessageQueueWorkerManager menager)
     {
         _sessionId = sessionId;
-        _messageQueueDispatcher = new MessageQueueDispatcher();        
+        _messageQueueDispatcher = new MessageQueueDispatcher();
+        _timerScheduleManager = new TimerScheduleManager();
 
         var messageQueueWorker = menager.GetWorker(sessionId);
         _messageQueueWorker = messageQueueWorker;
@@ -113,7 +114,7 @@ public class UserSession : IDisposable, ITickable, IMessageQueueReceiver
         if (_disposed)
             return false;
 
-        return await _messageQueueDispatcher.OnRecvMessageAsync(this, _sender, message);        
+        return await _messageQueueDispatcher.OnRecvMessageAsync(this, _sender, message);
     }
 
     public async Task<bool> SendQueueAsync(MessageWrapper message)
@@ -126,6 +127,7 @@ public class UserSession : IDisposable, ITickable, IMessageQueueReceiver
 
     public void Tick()
     {
+        _timerScheduleManager.Tick();
     }
 
     public async Task<bool> EnqueueMessageAsync(IMessageQueue message)
