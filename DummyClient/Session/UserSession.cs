@@ -24,8 +24,8 @@ public class UserSession : IDisposable
 
     public void Dispose()
     {
-        _client.Dispose();
-        _stream.Dispose();
+        _client?.Dispose();
+        _stream?.Dispose();
     }
     public async Task ConnectAsync(string host, int port)
     {

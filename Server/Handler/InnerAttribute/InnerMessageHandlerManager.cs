@@ -42,11 +42,6 @@ public class InnerMessageHandlerManager
                     _asyncHandlers[attr.MessageType] = (IInnerMessageHandlerAsync)Activator.CreateInstance(type)!;
             }
         }
-    }
-
-    public bool TryGetSync(Type type, out IInnerMessageHandler handler) 
-        => _syncHandlers.TryGetValue(type, out handler);
-    public bool TryGetAsync(Type type, out IInnerMessageHandlerAsync handler) 
-        => _asyncHandlers.TryGetValue(type, out handler);
+    }    
 }
 

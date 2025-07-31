@@ -10,22 +10,25 @@ public class ReceiverHandler : IDisposable
     private readonly IServerLogger _logger = ServerLoggerFactory.CreateLogger();
     private Action<MessageWrapper>? _onMessage;
     private Func<MessageWrapper, Task<bool>>? _onMessageAsync;
+    private Func<MessageWrapper.PayloadOneofCase, bool>? _messageAsyncChecker;
     private byte[] _receiveBuffer;
 
     public ReceiverHandler(Action<MessageWrapper>? onMessage = null,
         Func<MessageWrapper, Task<bool>>? onMessageAsync = null,
+        Func<MessageWrapper.PayloadOneofCase, bool>? messageAsyncChecker = null,
         int bufferSize = SessionConstInfo.MaxBufferSize)
     {
         _receiveBuffer = new byte[bufferSize];
         _onMessage = onMessage;
         _onMessageAsync = onMessageAsync;
+        _messageAsyncChecker = messageAsyncChecker;
     }
     public void Dispose()
     {
     }
 
     public async Task<bool> OnReceiveAsync(NetworkStream stream)
-    {        
+    {
         byte[] header = new byte[2]; // 헤더를 읽자
         var headerRead = await ReadExactAsync(stream, header, 0, 2);
         if (headerRead == false)
@@ -50,16 +53,8 @@ public class ReceiverHandler : IDisposable
                 return false;
             }
 
-            if(_onMessageAsync != null)
-            {
-                // 메시지 핸들러로 위임
-                await OnHandleAsync(_receiveBuffer.AsMemory(0, bodyLength));
-            }
-            else
-            {
-                // 메시지 핸들러로 위임
-                OnHandle(_receiveBuffer.AsMemory(0, bodyLength));
-            }            
+            // 메시지 핸들러로 위임
+            await OnHandleAsync(_receiveBuffer.AsMemory(0, bodyLength));
         }
         catch (Exception ex)
         {
@@ -93,9 +88,19 @@ public class ReceiverHandler : IDisposable
         {
             // protobuf 메시지 파싱
             var message = MessageWrapper.Parser.ParseFrom(data.Span);
-            if (_onMessageAsync != null)
+            if (_messageAsyncChecker != null && _messageAsyncChecker(message.PayloadCase))
             {
-                await _onMessageAsync(message);
+                if (_onMessageAsync != null)
+                {
+                    await _onMessageAsync(message);
+                }
+            }
+            else
+            {
+                if (_onMessage != null)
+                {
+                    _onMessage(message);
+                }
             }
 
             return true;
@@ -104,27 +109,6 @@ public class ReceiverHandler : IDisposable
         {
             _logger.Error(() => $"[ReceiverHandler 오류] ", ex);
             return false;
-        }        
-    }
-
-
-    public void OnHandle(ReadOnlyMemory<byte> data)
-    {
-        try
-        {
-            // protobuf 메시지 파싱
-            var message = MessageWrapper.Parser.ParseFrom(data.Span);
-            if (_onMessage != null)
-            {
-                _onMessage(message);
-            }
-
-        }
-        catch (Exception ex)
-        {
-            _logger.Error(() => $"[ReceiverHandler 오류] ", ex);
         }
     }
-
-
 }

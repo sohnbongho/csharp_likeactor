@@ -4,6 +4,7 @@ using Library.Network;
 using Messages;
 using Server.Handler;
 using Server.Handler.InnerAttribute;
+using Server.Handler.RemoteAttribute;
 using Server.Model;
 using Server.ServerWorker.Interface;
 using System.Net.Sockets;
@@ -22,6 +23,7 @@ public class UserSession : IDisposable, ITickable, IMessageReceiver
     private MessageQueue<IInnerServerMessage>? _messageQueue;
     private readonly ulong _sessionId;
     private readonly InnerMessageHandlerManager _innerMessageHandlers;
+    private readonly RemoteMessageHandlerManager _remoteMessageHandlers;
 
     public static UserSession Of(ulong sessionId)
     {
@@ -30,26 +32,28 @@ public class UserSession : IDisposable, ITickable, IMessageReceiver
 
         return user;
     }
-    
+
 
     private UserSession(ulong sessionId)
     {
         _sessionId = sessionId;
-        _innerMessageHandlers = new();        
+        _innerMessageHandlers = new();
+        _remoteMessageHandlers = new();
     }
     private void RegisterHandlers()
     {
         _innerMessageHandlers.RegisterHandlers();
+        _remoteMessageHandlers.RegisterHandlers();
     }
 
 
     public void Bind(TcpClient client)
     {
-        _receiver = new ReceiverHandler(OnRecvMessage, OnRecvMessageAsync);
+        _receiver = new ReceiverHandler(OnRecvMessage, OnRecvMessageAsync, _remoteMessageHandlers.IsAsync);
         _sender = new SenderHandler();
         _userConnection = new UserConnectionSystem(client);
         _messageQueue = new MessageQueue<IInnerServerMessage>();
-    }   
+    }
 
 
     public void Dispose()
@@ -110,17 +114,14 @@ public class UserSession : IDisposable, ITickable, IMessageReceiver
     public void OnRecvMessage(MessageWrapper messageWrapper)
     {
         _logger.Debug(() => $"OnRecvMessage type:{messageWrapper.PayloadCase.ToString()}");
-
+        _remoteMessageHandlers.OnRecvMessage(this, messageWrapper);
 
     }
 
     public async Task<bool> OnRecvMessageAsync(MessageWrapper messageWrapper)
     {
         _logger.Debug(() => $"OnRecvMessageAsync type:{messageWrapper.PayloadCase.ToString()}");
-
-        await SendAsync(messageWrapper.Clone());
-
-        return true;
+        return await _remoteMessageHandlers.OnRecvMessageAsync(this, messageWrapper);
     }
 
     public async Task<bool> SendAsync(MessageWrapper message)
@@ -139,18 +140,18 @@ public class UserSession : IDisposable, ITickable, IMessageReceiver
     }
 
     public void Tick()
-    {
-        _logger.Debug(() => $"Tick() SessionId:{SessionId.ToString()}");
+    {        
         if (_messageQueue == null)
             return;
 
         while (_messageQueue.TryDequeue(out var message))
         {
             // 내부 메시지에 대한 처리 attribute로
+
         }
     }
 
     public void OnRecvMessageHandle(IInnerServerMessage message)
-    {        
+    {
     }
 }
