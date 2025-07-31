@@ -11,7 +11,7 @@ using System.Net.Sockets;
 
 namespace Server.Actors.User;
 
-public class UserSession : IDisposable, ITickable, IMessageReceiver
+public class UserSession : IAsyncDisposable, ITickable, IMessageReceiver
 {
     public ulong SessionId => _sessionId;
 
@@ -55,11 +55,12 @@ public class UserSession : IDisposable, ITickable, IMessageReceiver
         _messageQueue = new MessageQueue<IInnerServerMessage>();
     }
 
-
-    public void Dispose()
+    
+    public async ValueTask DisposeAsync()
     {
         if (_receiver != null)
         {
+            await _receiver.StopAsync();
             _receiver.Dispose();
             _receiver = null;
         }
@@ -80,7 +81,6 @@ public class UserSession : IDisposable, ITickable, IMessageReceiver
             _messageQueue = null;
         }
     }
-
     public async Task RunAsync()
     {
         try
@@ -108,7 +108,7 @@ public class UserSession : IDisposable, ITickable, IMessageReceiver
         }
         finally
         {
-            Dispose();
+            await DisposeAsync();
         }
     }
     public void OnRecvMessage(MessageWrapper messageWrapper)
@@ -154,4 +154,6 @@ public class UserSession : IDisposable, ITickable, IMessageReceiver
     public void OnRecvMessageHandle(IInnerServerMessage message)
     {
     }
+
+    
 }
