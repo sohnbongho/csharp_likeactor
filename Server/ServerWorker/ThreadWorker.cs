@@ -1,7 +1,7 @@
 ﻿using Library.ContInfo;
 using Library.Logger;
 using Server.ServerWorker.Interface;
-using Server.Session.User;
+using Server.Actors.User;
 
 namespace Server.ServerWorker;
 

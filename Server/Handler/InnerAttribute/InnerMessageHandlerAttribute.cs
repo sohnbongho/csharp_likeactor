@@ -12,3 +12,14 @@ public class InnerMessageHandlerAttribute : Attribute
         MessageType = messageType;
     }
 }
+
+[AttributeUsage(AttributeTargets.Class, AllowMultiple = false)]
+public class InnerMessageHandlerAsyncAttribute : Attribute
+{
+    public Type MessageType { get; }
+
+    public InnerMessageHandlerAsyncAttribute(Type messageType)
+    {
+        MessageType = messageType;
+    }
+}

@@ -2,13 +2,15 @@
 using Library.MessageQueue;
 using Library.Network;
 using Messages;
+using Server.Handler;
+using Server.Handler.InnerAttribute;
 using Server.Model;
 using Server.ServerWorker.Interface;
 using System.Net.Sockets;
 
-namespace Server.Session.User;
+namespace Server.Actors.User;
 
-public class UserSession : IDisposable, ITickable
+public class UserSession : IDisposable, ITickable, IMessageReceiver
 {
     public ulong SessionId => _sessionId;
 
@@ -19,23 +21,36 @@ public class UserSession : IDisposable, ITickable
     private UserConnectionSystem? _userConnection;
     private MessageQueue<IInnerServerMessage>? _messageQueue;
     private readonly ulong _sessionId;
+    private readonly InnerMessageHandlerManager _innerMessageHandlers;
 
-    public static UserSession Of(ulong sessionId) => new UserSession(sessionId);
+    public static UserSession Of(ulong sessionId)
+    {
+        var user = new UserSession(sessionId);
+        user.RegisterHandlers();
+
+        return user;
+    }
+    
 
     private UserSession(ulong sessionId)
     {
         _sessionId = sessionId;
-
-        // TODO: 이벤트 attribute를 가져오자
-
+        _innerMessageHandlers = new();        
     }
+    private void RegisterHandlers()
+    {
+        _innerMessageHandlers.RegisterHandlers();
+    }
+
+
     public void Bind(TcpClient client)
     {
         _receiver = new ReceiverHandler(OnRecvMessage, OnRecvMessageAsync);
         _sender = new SenderHandler();
         _userConnection = new UserConnectionSystem(client);
         _messageQueue = new MessageQueue<IInnerServerMessage>();
-    }
+    }   
+
 
     public void Dispose()
     {
@@ -130,9 +145,12 @@ public class UserSession : IDisposable, ITickable
             return;
 
         while (_messageQueue.TryDequeue(out var message))
-        {            
+        {
             // 내부 메시지에 대한 처리 attribute로
         }
     }
 
+    public void OnRecvMessageHandle(IInnerServerMessage message)
+    {        
+    }
 }
