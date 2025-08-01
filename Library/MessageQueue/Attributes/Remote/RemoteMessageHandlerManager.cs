@@ -5,14 +5,30 @@ namespace Library.MessageQueue.Attributes.Remote;
 
 public class RemoteMessageHandlerManager
 {
+    private static readonly Dictionary<MessageWrapper.PayloadOneofCase, IRemoteMessageHandler> _cachedSyncHandlers = new();
+    private static readonly Dictionary<MessageWrapper.PayloadOneofCase, IRemoteMessageHandlerAsync> _cachedAsyncHandlers = new();
+    
     private readonly Dictionary<MessageWrapper.PayloadOneofCase, IRemoteMessageHandler> _syncHandlers = new();
-    private readonly Dictionary<MessageWrapper.PayloadOneofCase, IRemoteMessageHandlerAsync> _asyncHandlers = new();
+    private readonly Dictionary<MessageWrapper.PayloadOneofCase, IRemoteMessageHandlerAsync> _asyncHandlers = new();    
 
     public RemoteMessageHandlerManager()
-    {
+    {        
     }
 
     public void RegisterHandlers()
+    {
+        if (_cachedSyncHandlers.Any() == false && _cachedAsyncHandlers.Any() == false)
+        {
+            RegisterCachedHandlers();
+        }
+
+        foreach (var kv in _cachedSyncHandlers)
+            _syncHandlers[kv.Key] = kv.Value;
+
+        foreach (var kv in _cachedAsyncHandlers)
+            _asyncHandlers[kv.Key] = kv.Value;
+    }
+    private void RegisterCachedHandlers()
     {
         var allTypes = AppDomain.CurrentDomain.GetAssemblies().SelectMany(a => a.GetTypes());
 
@@ -22,14 +38,14 @@ public class RemoteMessageHandlerManager
             {
                 var attr = type.GetCustomAttribute<RemoteMessageHandlerAttribute>();
                 if (attr != null)
-                    _syncHandlers[attr.MessageType] = (IRemoteMessageHandler)Activator.CreateInstance(type)!;
+                    _cachedSyncHandlers[attr.MessageType] = (IRemoteMessageHandler)Activator.CreateInstance(type)!;
             }
 
             if (typeof(IRemoteMessageHandlerAsync).IsAssignableFrom(type))
             {
                 var attr = type.GetCustomAttribute<RemoteMessageHandlerAsyncAttribute>();
                 if (attr != null)
-                    _asyncHandlers[attr.MessageType] = (IRemoteMessageHandlerAsync)Activator.CreateInstance(type)!;
+                    _cachedAsyncHandlers[attr.MessageType] = (IRemoteMessageHandlerAsync)Activator.CreateInstance(type)!;
             }
         }
     }

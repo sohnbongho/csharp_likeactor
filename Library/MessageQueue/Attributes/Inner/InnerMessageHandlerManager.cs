@@ -5,6 +5,10 @@ namespace Library.MessageQueue.Attributes.Inner;
 
 public class InnerMessageHandlerManager
 {
+    private static readonly Dictionary<Type, IInnerMessageHandler> _cachedSyncHandlers = new();
+    private static readonly Dictionary<Type, IInnerMessageHandlerAsync> _cachedAsyncHandlers = new();    
+
+
     private readonly Dictionary<Type, IInnerMessageHandler> _syncHandlers = new();
     private readonly Dictionary<Type, IInnerMessageHandlerAsync> _asyncHandlers = new();
 
@@ -14,6 +18,20 @@ public class InnerMessageHandlerManager
 
     public void RegisterHandlers()
     {
+        if(_cachedSyncHandlers.Any() == false && _cachedAsyncHandlers.Any() == false )
+        {
+            RegisterCachedHandlers();
+        }
+
+        foreach (var kv in _cachedSyncHandlers)
+            _syncHandlers[kv.Key] = kv.Value;
+
+        foreach (var kv in _cachedAsyncHandlers)
+            _asyncHandlers[kv.Key] = kv.Value;
+    }
+
+    private void RegisterCachedHandlers()
+    {
         var allTypes = AppDomain.CurrentDomain.GetAssemblies().SelectMany(a => a.GetTypes());
 
         foreach (var type in allTypes)
@@ -22,14 +40,14 @@ public class InnerMessageHandlerManager
             {
                 var attr = type.GetCustomAttribute<InnerMessageHandlerAttribute>();
                 if (attr != null)
-                    _syncHandlers[attr.MessageType] = (IInnerMessageHandler)Activator.CreateInstance(type)!;
+                    _cachedSyncHandlers[attr.MessageType] = (IInnerMessageHandler)Activator.CreateInstance(type)!;
             }
 
             if (typeof(IInnerMessageHandlerAsync).IsAssignableFrom(type))
             {
                 var attr = type.GetCustomAttribute<InnerMessageHandlerAsyncAttribute>();
                 if (attr != null)
-                    _asyncHandlers[attr.MessageType] = (IInnerMessageHandlerAsync)Activator.CreateInstance(type)!;
+                    _cachedAsyncHandlers[attr.MessageType] = (IInnerMessageHandlerAsync)Activator.CreateInstance(type)!;
             }
         }
     }

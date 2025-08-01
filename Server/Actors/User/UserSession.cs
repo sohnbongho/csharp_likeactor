@@ -95,12 +95,7 @@ public class UserSession : IDisposable, ITickable, IMessageQueueReceiver, ISessi
 
         return await _messageQueueDispatcher.OnRecvMessageAsync(this, _sender, message);
     }
-
-    public bool SendMessage(MessageWrapper message)
-    {
-        return _sender.Send(message);
-    }
-
+    
     public void Tick()
     {
         _timerScheduleManager.Tick();

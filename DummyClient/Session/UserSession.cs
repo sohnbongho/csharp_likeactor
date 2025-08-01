@@ -46,7 +46,7 @@ public class UserSession : IDisposable, IMessageQueueReceiver, ISessionUsable
         
     }
 
-    public bool Start()
+    public void Start()
     {
         while (true)
         {
@@ -58,8 +58,7 @@ public class UserSession : IDisposable, IMessageQueueReceiver, ISessionUsable
             _logger.Debug(() => $"[송신] KeepAliveRequest #{++_counter} 전송");
 
             Task.Delay(1000).Wait();
-        }
-        return true;
+        }        
     }
 
     public void OnRecvMessage(MessageWrapper messageWrapper)
