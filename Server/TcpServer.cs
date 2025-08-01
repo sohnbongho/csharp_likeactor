@@ -39,7 +39,7 @@ public class TcpServer
 
     public void Start()
     {
-        _logger.Info(() => $"[서버 시작] 포트 {_port}에서 수신 대기...");
+        _logger.Info(() => $"Server Start Listen Port:{_port}...");
 
         _acceptor.Start();
         _shutdownEvent.WaitOne();
@@ -47,7 +47,7 @@ public class TcpServer
 
     public void Stop()
     {
-        _logger.Info(() => $"[서버 종료 요청]");
+        _logger.Info(() => $"Stop Server");
 
         _acceptor.Stop();
         _shutdownEvent.Set();

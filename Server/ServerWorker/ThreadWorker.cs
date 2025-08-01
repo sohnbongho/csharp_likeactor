@@ -68,16 +68,16 @@ public class ThreadWorker
                 _lock.ExitReadLock(); 
             }
 
-            try
+            foreach (var session in objs)
             {
-                foreach (var session in objs)
+                try
                 {
-                    session.Tick(); // 동기 Tick
+                    session.Tick();
                 }
-            }
-            catch (Exception ex)
-            {
-                _logger.Error(() => $"[Worker#{_id} TickError] ", ex);
+                catch (Exception ex)
+                {
+                    _logger.Error(() => $"[Worker#{_id} TickError] ", ex);
+                }
             }
 
             Thread.Sleep(ThreadConstInfo.TickMillSecond); // Tick 주기
