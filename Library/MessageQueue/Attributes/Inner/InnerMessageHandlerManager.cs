@@ -1,4 +1,5 @@
-﻿using Library.Model;
+﻿using Library.MessageQueue.Attributes.Remote;
+using Library.Model;
 using System.Reflection;
 
 namespace Library.MessageQueue.Attributes.Inner;
@@ -24,10 +25,16 @@ public class InnerMessageHandlerManager
         }
 
         foreach (var kv in _cachedSyncHandlers)
-            _syncHandlers[kv.Key] = kv.Value;
+        {
+            var instance = (IInnerMessageHandler)Activator.CreateInstance(kv.Value.GetType())!;
+            _syncHandlers[kv.Key] = instance;
+        }
 
         foreach (var kv in _cachedAsyncHandlers)
-            _asyncHandlers[kv.Key] = kv.Value;
+        {
+            var instance = (IInnerMessageHandlerAsync)Activator.CreateInstance(kv.Value.GetType())!;
+            _asyncHandlers[kv.Key] = instance;
+        }
     }
 
     private void RegisterCachedHandlers()

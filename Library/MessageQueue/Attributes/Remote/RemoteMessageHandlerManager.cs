@@ -23,10 +23,16 @@ public class RemoteMessageHandlerManager
         }
 
         foreach (var kv in _cachedSyncHandlers)
-            _syncHandlers[kv.Key] = kv.Value;
+        {
+            var instance = (IRemoteMessageHandler)Activator.CreateInstance(kv.Value.GetType())!;
+            _syncHandlers[kv.Key] = instance;
+        }
 
         foreach (var kv in _cachedAsyncHandlers)
-            _asyncHandlers[kv.Key] = kv.Value;
+        {
+            var instance = (IRemoteMessageHandlerAsync)Activator.CreateInstance(kv.Value.GetType())!;
+            _asyncHandlers[kv.Key] = instance;
+        }
     }
     private void RegisterCachedHandlers()
     {

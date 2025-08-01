@@ -21,7 +21,7 @@ public class MessageQueueDispatcher
         _remoteMessageHandlers.RegisterHandlers();
     }
 
-    public async Task<bool> OnRecvMessageAsync(IMessageQueueReceiver receiver, SenderHandler? sender, IMessageQueue message)
+    public async Task<bool> OnRecvMessageAsync(IMessageQueueReceiver receiver, SenderHandler sender, IMessageQueue message)
     {
         if (message is RemoteReceiveMessage receiveMessage)
         {
@@ -37,11 +37,8 @@ public class MessageQueueDispatcher
         }
         else if (message is RemoteSendMessage sendMessage)
         {
-            if (sender != null)
-            {
-                sender.Send(sendMessage.MessageWrapper);
-            }
-        }        
+            sender.Send(sendMessage.MessageWrapper);
+        }
         else if (message is InnerReceiveMessage innerReceiveMessage)
         {
             var messageWrapper = innerReceiveMessage.Message;
