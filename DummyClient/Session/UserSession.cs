@@ -7,7 +7,7 @@ using System.Net.Sockets;
 
 namespace DummyClient.Session;
 
-public class UserSession : IDisposable, IMessageQueueReceiver
+public class UserSession : IDisposable, IMessageQueueReceiver, ISessionUsable
 {
     private readonly TcpClient _client;
     private NetworkStream _stream = null!;

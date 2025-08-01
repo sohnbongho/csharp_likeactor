@@ -11,7 +11,7 @@ using System.Net.Sockets;
 
 namespace Server.Actors.User;
 
-public class UserSession : IDisposable, ITickable, IMessageQueueReceiver
+public class UserSession : IDisposable, ITickable, IMessageQueueReceiver, ISessionUsable
 {
     public ulong SessionId => _sessionId;
 

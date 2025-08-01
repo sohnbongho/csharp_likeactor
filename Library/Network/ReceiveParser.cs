@@ -2,7 +2,7 @@
 
 namespace Library.Network;
 
-public class ReceiveParser
+public class ReceiveParser : IDisposable
 {
     private enum ReceiveState
     {
@@ -77,6 +77,13 @@ public class ReceiveParser
         }
 
         return messages;
+    }
+
+    public void Dispose()
+    {
+        _state = ReceiveState.Header;
+        _bodySize = 0;
+        _remainedOffset = 0;
     }
 }
 

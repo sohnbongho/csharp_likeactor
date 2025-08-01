@@ -2,7 +2,6 @@
 using Library.Logger;
 using Library.MessageQueue;
 using Library.MessageQueue.Message;
-using Messages;
 using System.Net.Sockets;
 
 namespace Library.Network;
@@ -49,7 +48,7 @@ public class ReceiverHandler : IDisposable
             if (e.BytesTransferred <= 0 || e.SocketError != SocketError.Success)
             {
                 _logger.Info(() => "Disconnect");
-                HandleDisconnect();
+                Disconnected();
                 return;
             }
 
@@ -67,21 +66,28 @@ public class ReceiverHandler : IDisposable
         catch (Exception ex)
         {
             _logger.Error(() => "Exception OnReceiveCompleted", ex);
-            HandleDisconnect();
+            Disconnected();
         }
     }
 
-    private void HandleDisconnect()
+    private void Disconnected()
     {
-        _socket?.Shutdown(SocketShutdown.Both);
-        _socket?.Close();
-        _socket = null;
+        if(_socket != null )
+        {
+            _socket.Shutdown(SocketShutdown.Both);
+            _socket.Close();
+            _socket = null;
+        }        
 
-        _receiver.Disconnect();
+        if (_receiver is ISessionUsable sessionUsable)
+        {
+            sessionUsable.Disconnect();
+        }
     }
 
     public void Dispose()
     {
+        _parser.Dispose();
         _socket = null;
     }
 }

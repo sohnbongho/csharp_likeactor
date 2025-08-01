@@ -6,6 +6,5 @@ namespace Library.MessageQueue;
 public interface IMessageQueueReceiver
 {
     Task<bool> EnqueueMessageAsync(IMessageQueue message);
-    Task<bool> OnRecvMessageAsync(IMessageQueue messageWrapper);
-    void Disconnect();    
+    Task<bool> OnRecvMessageAsync(IMessageQueue messageWrapper);    
 }
