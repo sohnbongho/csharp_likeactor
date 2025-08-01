@@ -4,28 +4,32 @@ namespace Library.Network;
 
 public class UserConnectionComponent : IDisposable
 {
-    public NetworkStream? Stream => _stream;
-    private TcpClient? _client;
-    private NetworkStream? _stream;
+    public Socket? Socket => _socket;
 
-    public UserConnectionComponent(TcpClient client)
+    private Socket? _socket;
+
+    public UserConnectionComponent(Socket socket)
     {
-        _client = client;
-        _stream = _client.GetStream();
+        _socket = socket;
+        _socket.NoDelay = true;
     }
 
     public void Dispose()
     {
-        if (_stream != null)
+        if (_socket != null)
         {
-            _stream.Dispose();
-            _stream = null;
-        }
-        if (_client != null)
-        {
-            _client.Close();
-            _client.Dispose();
-            _client = null;
+            try
+            {
+                _socket.Shutdown(SocketShutdown.Both);
+            }
+            catch
+            {
+                // 이미 닫혔을 경우 무시
+            }
+
+            _socket.Close();
+            _socket.Dispose();
+            _socket = null;
         }
     }
 }

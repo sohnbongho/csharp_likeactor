@@ -23,8 +23,9 @@ public class UserSession : IDisposable, IMessageQueueReceiver
         _messageQueueWorker = new MessageQueueWorker();
 
         _receiver = new ReceiverHandler(this, _messageQueueWorker);
-        _sender = new SenderHandler(this, _messageQueueWorker);
+        _sender = new SenderHandler();
     }
+    
 
     public void Dispose()
     {
@@ -36,11 +37,16 @@ public class UserSession : IDisposable, IMessageQueueReceiver
         await _client.ConnectAsync(host, port);
         _stream = _client.GetStream();
 
-        _sender.SetStream(_stream);
-        _receiver.SetStream(_stream);
+        var socket = _client.Client;
+
+        _sender.Bind(socket);
+
+        _receiver.Bind(socket);
+        _receiver.StartReceive();
+        
     }
 
-    public async Task<bool> StartEcho()
+    public bool Start()
     {
         while (true)
         {
@@ -48,14 +54,10 @@ public class UserSession : IDisposable, IMessageQueueReceiver
             {
                 KeepAliveRequest = new KeepAliveRequest { }
             };
-            await _sender.AddQueueAsync(message);
+            _sender.Send(message);
             _logger.Debug(() => $"[송신] KeepAliveRequest #{++_counter} 전송");
 
-            var succeed = await _receiver.OnReceiveAsync();
-            if (succeed == false)
-                break;
-
-            await Task.Delay(500);
+            Task.Delay(1000).Wait();
         }
         return true;
     }
@@ -65,7 +67,7 @@ public class UserSession : IDisposable, IMessageQueueReceiver
         _logger.Debug(() => $"OnRecvMessage type:{messageWrapper.PayloadCase.ToString()}");
     }
 
-    public async Task<bool> OnRecvMessageAsync(IMessageQueue message)
+    public Task<bool> OnRecvMessageAsync(IMessageQueue message)
     {
         if (message is RemoteReceiveMessage receiveMessage)
         {
@@ -75,10 +77,10 @@ public class UserSession : IDisposable, IMessageQueueReceiver
         {
             if (_sender != null)
             {
-                await _sender.SendAsync(sendMessage.MessageWrapper);
+                _sender.Send(sendMessage.MessageWrapper);
             }
         }
-        return true;
+        return Task.FromResult(true);
     }
 
     public async Task<bool> EnqueueMessageAsync(IMessageQueue message)
@@ -87,5 +89,8 @@ public class UserSession : IDisposable, IMessageQueueReceiver
         return true;
     }
 
-    
+    public void Disconnect()
+    {
+        Dispose();
+    }
 }

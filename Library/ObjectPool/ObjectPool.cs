@@ -1,5 +1,6 @@
 ﻿using Library.Logger;
 using System.Collections.Concurrent;
+using System.Drawing;
 
 namespace Library.ObjectPool;
 
@@ -7,20 +8,20 @@ public class ObjectPool<T> : IObjectPool<T> where T : class
 {
     private readonly IServerLogger _logger = ServerLoggerFactory.CreateLogger();
     private readonly ConcurrentBag<T> _pool = new();
-    private readonly int _maxSize;
-    private readonly Func<T> _factory;
+    private readonly int _maxSize;    
 
-    public ObjectPool(int size, Func<T> factory)
+    public ObjectPool(int size)
     {
-        _maxSize = size;
-        _factory = factory;
-
-        for (int i = 0; i < size; i++)
-        {            
-            _pool.Add(_factory());
+        _maxSize = size;        
+    }
+    public void Init(Func<T> factory)
+    {
+        for (int i = 0; i < _maxSize; i++)
+        {
+            _pool.Add(factory());
         }
 
-        _logger.Info(() => $"[ObjectPool<{typeof(T).Name}>] Initialized with size: {size}");
+        _logger.Info(() => $"[ObjectPool<{typeof(T).Name}>] Initialized with size: {_maxSize}");
     }
 
     public T Rent()

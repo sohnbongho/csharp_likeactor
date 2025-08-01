@@ -1,8 +1,6 @@
 ﻿using Google.Protobuf;
 using Library.ContInfo;
 using Library.Logger;
-using Library.MessageQueue;
-using Library.MessageQueue.Message;
 using Messages;
 using System.Net.Sockets;
 
@@ -11,83 +9,96 @@ namespace Library.Network;
 public class SenderHandler : IDisposable
 {
     private readonly IServerLogger _logger = ServerLoggerFactory.CreateLogger();
-    private byte[] _sendBuffer;
+    private Socket? _socket;
+    private readonly SocketAsyncEventArgs _sendEventArgs;
+    private readonly byte[] _sendBuffer = new byte[SessionConstInfo.MaxBufferSize];
+    private readonly Queue<MessageWrapper> _pendingSendQueue = new();
+    private bool _isSending = false;
 
-    private readonly IMessageQueueReceiver _receiver;
-    private readonly MessageQueueWorker _messageQueueWorker;
-        
-    private NetworkStream? _stream;
+    public SenderHandler()
+    {
+        _sendEventArgs = new SocketAsyncEventArgs();
+        _sendEventArgs.Completed += OnSendCompleted;
+    }
+    public void Bind(Socket? socket)
+    {
+        _socket = socket;
+    }
+    public void Dispose()
+    {
+        _socket = null;
+    }
 
-    public SenderHandler(
-        IMessageQueueReceiver receiver,
-        MessageQueueWorker messageQueueWorker,
-        int bufferSize = SessionConstInfo.MaxBufferSize)
+    public bool Send(MessageWrapper message)
     {
-        _receiver = receiver;
-        _messageQueueWorker = messageQueueWorker;
-        _sendBuffer = new byte[bufferSize];
-    }
-    public void SetStream(NetworkStream? stream)
-    {
-        _stream = stream;
-    }
-    public async Task<bool> AddQueueAsync(MessageWrapper message)
-    {
-        await _messageQueueWorker.EnqueueAsync(_receiver, new RemoteSendMessage
+        lock (_pendingSendQueue)
         {
-            MessageWrapper = message
-        });
-        return true;
-    }
-
-    public async Task<bool> SendAsync(MessageWrapper message)
-    {
-        if (_stream == null || !_stream.CanWrite)
-        {
-            _logger.Warn(() => "[Send 실패] stream이 닫혀있거나 null입니다.");
-            return false;
+            _pendingSendQueue.Enqueue(message);
+            if (_isSending) return true; // 이미 처리 중이면 큐에만 넣음
+            _isSending = true;
         }
 
-        var buffer = _sendBuffer;
+        return ProcessSendQueue();
 
+
+    }
+    private bool ProcessSendQueue()
+    {
+        if (_socket == null)
+            return false;
+
+        MessageWrapper? message;
+
+        lock (_pendingSendQueue)
+        {
+            if (_pendingSendQueue.Count == 0)
+            {
+                _isSending = false;
+                return true;
+            }
+            message = _pendingSendQueue.Dequeue();
+        }
+
+        // 직렬화 및 SocketAsyncEventArgs 처리
+        // ...
         try
         {
-            // 메시지를 직렬화
             using var ms = new MemoryStream();
             message.WriteTo(ms);
             var body = ms.ToArray();
-
-            // 총 길이 = 2바이트 length prefix + body
             ushort bodyLength = (ushort)body.Length;
-            int totalSize = 2 + bodyLength;
 
-            if (_sendBuffer.Length < totalSize)
+            // length prefix
+            var lengthBytes = BitConverter.GetBytes(bodyLength);
+            Buffer.BlockCopy(lengthBytes, 0, _sendBuffer, 0, 2);
+            Buffer.BlockCopy(body, 0, _sendBuffer, 2, bodyLength);
+
+            _sendEventArgs.SetBuffer(_sendBuffer, 0, 2 + bodyLength);
+
+            if (!_socket.SendAsync(_sendEventArgs))
             {
-                _sendBuffer = new byte[totalSize];
+                OnSendCompleted(_socket, _sendEventArgs);
             }
 
-            buffer = _sendBuffer;
-
-            // 길이 헤더
-            var lengthBytes = BitConverter.GetBytes(bodyLength);
-            Buffer.BlockCopy(lengthBytes, 0, buffer, 0, 2);
-
-            // 메시지 바디
-            Buffer.BlockCopy(body, 0, buffer, 2, bodyLength);
-
-            // 전송
-            await _stream.WriteAsync(buffer, 0, totalSize);
             return true;
         }
         catch (Exception ex)
         {
-            _logger.Error(() => "[Send 실패]", ex);
+            _logger.Error(() => $"SendAsync Error", ex);
             return false;
         }
     }
 
-    public void Dispose()
+    private void OnSendCompleted(object? sender, SocketAsyncEventArgs e)
     {
-        _stream = null;        
+        if (e.SocketError != SocketError.Success)
+        {
+            _logger.Info(() => "Send Error");
+            _isSending = false;
+            return;
+        }
+        // 다음 메시지 처리
+        ProcessSendQueue();
     }
 }
+

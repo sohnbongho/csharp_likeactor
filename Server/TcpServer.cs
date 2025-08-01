@@ -21,9 +21,12 @@ public class TcpServer
     public TcpServer(int port)
     {
         _port = port;
-        _userSessionPool = new ObjectPool<UserSession>(
-            SessionConstInfo.MaxUserSessionPoolSize,
-            () => UserSession.Of(SessionIdGenerator.Generate(), _messageQueueWorkerManager));
+        _userSessionPool = new ObjectPool<UserSession>(SessionConstInfo.MaxUserSessionPoolSize);
+    }
+    public void Init()
+    {        
+        _userSessionPool.Init(() => UserSession.Of(SessionIdGenerator.Generate(), _messageQueueWorkerManager, _userSessionPool, _threadPoolManager));
+
     }
 
     public async Task StartAsync()
@@ -39,14 +42,9 @@ public class TcpServer
             _logger.Debug(() => $"[접속] 클라이언트 연결됨");
 
             var session = _userSessionPool.Rent();
-            session.Bind(client);
-            _threadPoolManager.Add(session);
-
-            _ = session.RunAsync().ContinueWith(t =>
-            {
-                _threadPoolManager.Remove(session);
-                _userSessionPool.Return(session);
-            }); // fire-and-forget
+            var socket = client.Client;
+            session.Bind(socket);
+            _threadPoolManager.Add(session);            
         }        
     }
     

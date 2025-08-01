@@ -21,7 +21,7 @@ public class TcpDummyClient
 
             _logger.Debug(() => "[DummyClient] 연결 성공!");
 
-            await userSession.StartEcho();
+            userSession.Start();
 
         }
         catch (Exception ex)

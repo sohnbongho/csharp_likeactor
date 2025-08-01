@@ -1,6 +1,6 @@
 ﻿using Library.Model;
 
-namespace Server.Model;
+namespace Server.Model.Message;
 
 public class InnerTestMessage : IInnerServerMessage
 {

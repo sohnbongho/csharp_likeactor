@@ -39,9 +39,9 @@ public class MessageQueueDispatcher
         {
             if (sender != null)
             {
-                await sender.SendAsync(sendMessage.MessageWrapper);
+                sender.Send(sendMessage.MessageWrapper);
             }
-        }
+        }        
         else if (message is InnerReceiveMessage innerReceiveMessage)
         {
             var messageWrapper = innerReceiveMessage.Message;
