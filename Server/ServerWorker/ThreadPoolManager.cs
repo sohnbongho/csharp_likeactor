@@ -11,8 +11,11 @@ public class ThreadPoolManager
     {
         _threadCount = threadCount;
         _workers = new ThreadWorker[threadCount];
-
-        for (int i = 0; i < threadCount; i++)
+        
+    }
+    public void Start()
+    {
+        for (int i = 0; i < _threadCount; i++)
         {
             _workers[i] = new ThreadWorker(i);
             _workers[i].Start();

@@ -6,6 +6,7 @@ using Server.Actors.User;
 using System.Net;
 using System.Net.Sockets;
 using Library.MessageQueue;
+using Server.Actors;
 
 namespace Server;
 
@@ -14,19 +15,21 @@ public class TcpServer
     private readonly int _port;
     private TcpListener _listener = null!;
     private readonly IServerLogger _logger = ServerLoggerFactory.CreateLogger();
-    private readonly IObjectPool<UserSession> _userSessionPool;
-    private readonly ThreadPoolManager _threadPoolManager = new ThreadPoolManager(ThreadConstInfo.MaxUserThreadCount); // 4개 스레드
-    private readonly MessageQueueWorkerManager _messageQueueWorkerManager = new MessageQueueWorkerManager(ThreadConstInfo.MaxMessageQueueWorkerCount); // 4개 스레드
+    private readonly UserObjectPoolManager _userObjectPoolManager;
+    private readonly ThreadPoolManager _threadPoolManager;
+    private readonly MessageQueueWorkerManager _messageQueueWorkerManager;
 
     public TcpServer(int port)
     {
         _port = port;
-        _userSessionPool = new ObjectPool<UserSession>(SessionConstInfo.MaxUserSessionPoolSize);
+        _threadPoolManager = new ThreadPoolManager(ThreadConstInfo.MaxUserThreadCount); // 4개 스레드
+        _messageQueueWorkerManager = new MessageQueueWorkerManager(ThreadConstInfo.MaxMessageQueueWorkerCount); // 4개 스레드
+        _userObjectPoolManager = new UserObjectPoolManager(_threadPoolManager, _messageQueueWorkerManager);
     }
     public void Init()
-    {        
-        _userSessionPool.Init(() => UserSession.Of(SessionIdGenerator.Generate(), _messageQueueWorkerManager, _userSessionPool, _threadPoolManager));
-
+    {
+        _threadPoolManager.Start();
+        _userObjectPoolManager.Init();
     }
 
     public async Task StartAsync()
@@ -41,12 +44,10 @@ public class TcpServer
             var client = await _listener.AcceptTcpClientAsync();
             _logger.Debug(() => $"[접속] 클라이언트 연결됨");
 
-            var session = _userSessionPool.Rent();
             var socket = client.Client;
-            session.Bind(socket);
-            _threadPoolManager.Add(session);            
-        }        
+            _userObjectPoolManager.AcceptUser(socket);
+        }
     }
-    
+
 }
 

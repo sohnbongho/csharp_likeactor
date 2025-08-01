@@ -41,5 +41,5 @@ public class MessageQueueWorkerManager
         {
             await worker.DisposeAsync();
         }
-    }
+    }    
 }

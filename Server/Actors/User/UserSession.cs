@@ -2,10 +2,8 @@
 using Library.MessageQueue;
 using Library.MessageQueue.Message;
 using Library.Network;
-using Library.ObjectPool;
 using Library.Timer;
 using Messages;
-using Server.ServerWorker;
 using Server.ServerWorker.Interface;
 using System.Net.Sockets;
 
@@ -19,24 +17,23 @@ public class UserSession : IDisposable, ITickable, IMessageQueueReceiver, ISessi
 
     private readonly ReceiverHandler _receiver;
     private readonly SenderHandler _sender;
-
     private UserConnectionComponent? _userConnection;
+
     private readonly MessageQueueWorker _messageQueueWorker;
     private readonly MessageQueueDispatcher _messageQueueDispatcher;
     private readonly TimerScheduleManager _timerScheduleManager;
+
     private readonly ulong _sessionId;
     private bool _disposed;
 
-    private readonly IObjectPool<UserSession> _userSessionPool;
-    private readonly ThreadPoolManager _threadPoolManager;
+    private readonly UserObjectPoolManager _userManager;
 
     public static UserSession Of(
         ulong sessionId,
-        MessageQueueWorkerManager manager,
-        IObjectPool<UserSession> userSessionPool,
-        ThreadPoolManager threadPoolManager)
+        UserObjectPoolManager userManager,
+        MessageQueueWorkerManager workerManager)
     {
-        var user = new UserSession(sessionId, manager, userSessionPool, threadPoolManager);
+        var user = new UserSession(sessionId, userManager, workerManager);
         user.RegisterHandlers();
 
         return user;
@@ -44,16 +41,13 @@ public class UserSession : IDisposable, ITickable, IMessageQueueReceiver, ISessi
 
     private UserSession(
         ulong sessionId,
-        MessageQueueWorkerManager menager,
-        IObjectPool<UserSession> userSessionPool,
-        ThreadPoolManager threadPoolManager)
+        UserObjectPoolManager userManager,
+        MessageQueueWorkerManager workerManager)
     {
-        _userSessionPool = userSessionPool;
-        _threadPoolManager = threadPoolManager;
-
+        _userManager = userManager;
         _sessionId = sessionId;
         _messageQueueDispatcher = new MessageQueueDispatcher();
-        var messageQueueWorker = menager.GetWorker(sessionId);
+        var messageQueueWorker = workerManager.GetWorker(sessionId);
         _messageQueueWorker = messageQueueWorker;
 
         _timerScheduleManager = new TimerScheduleManager();
@@ -71,7 +65,7 @@ public class UserSession : IDisposable, ITickable, IMessageQueueReceiver, ISessi
     {
         _disposed = false;
         _userConnection = new UserConnectionComponent(socket);
-                
+
         _sender.Bind(_userConnection.Socket);
         _receiver.Bind(_userConnection.Socket);
         _receiver.StartReceive();
@@ -91,9 +85,7 @@ public class UserSession : IDisposable, ITickable, IMessageQueueReceiver, ISessi
         }
         _disposed = true;
 
-        _threadPoolManager.Remove(this);
-        _userSessionPool.Return(this);
-
+        _userManager.RemoveUser(this);
     }
 
     public async Task<bool> OnRecvMessageAsync(IMessageQueue message)
