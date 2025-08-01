@@ -1,5 +1,4 @@
-﻿using Library.MessageQueue.Attributes.Remote;
-using Library.Model;
+﻿using Library.Model;
 using System.Reflection;
 
 namespace Library.MessageQueue.Attributes.Inner;
@@ -7,7 +6,7 @@ namespace Library.MessageQueue.Attributes.Inner;
 public class InnerMessageHandlerManager
 {
     private static readonly Dictionary<Type, IInnerMessageHandler> _cachedSyncHandlers = new();
-    private static readonly Dictionary<Type, IInnerMessageHandlerAsync> _cachedAsyncHandlers = new();    
+    private static readonly Dictionary<Type, IInnerMessageHandlerAsync> _cachedAsyncHandlers = new();
 
 
     private readonly Dictionary<Type, IInnerMessageHandler> _syncHandlers = new();
@@ -19,7 +18,7 @@ public class InnerMessageHandlerManager
 
     public void RegisterHandlers()
     {
-        if(_cachedSyncHandlers.Any() == false && _cachedAsyncHandlers.Any() == false )
+        if (_cachedSyncHandlers.Any() == false && _cachedAsyncHandlers.Any() == false)
         {
             RegisterCachedHandlers();
         }

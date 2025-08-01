@@ -1,23 +1,21 @@
 ﻿using Library.ContInfo;
 using Library.Logger;
-using Library.ObjectPool;
-using Server.ServerWorker;
-using Server.Actors.User;
-using System.Net;
-using System.Net.Sockets;
 using Library.MessageQueue;
+using Server.Acceptor;
 using Server.Actors;
+using Server.ServerWorker;
 
 namespace Server;
 
 public class TcpServer
 {
     private readonly int _port;
-    private TcpListener _listener = null!;
     private readonly IServerLogger _logger = ServerLoggerFactory.CreateLogger();
     private readonly UserObjectPoolManager _userObjectPoolManager;
     private readonly ThreadPoolManager _threadPoolManager;
     private readonly MessageQueueWorkerManager _messageQueueWorkerManager;
+    private readonly TCPAcceptor _acceptor;
+    private readonly ManualResetEvent _shutdownEvent = new(false);
 
     public TcpServer(int port)
     {
@@ -25,28 +23,34 @@ public class TcpServer
         _threadPoolManager = new ThreadPoolManager(ThreadConstInfo.MaxUserThreadCount); // 4개 스레드
         _messageQueueWorkerManager = new MessageQueueWorkerManager(ThreadConstInfo.MaxMessageQueueWorkerCount); // 4개 스레드
         _userObjectPoolManager = new UserObjectPoolManager(_threadPoolManager, _messageQueueWorkerManager);
+        _acceptor = new TCPAcceptor(port);
     }
     public void Init()
     {
         _threadPoolManager.Start();
         _userObjectPoolManager.Init();
+        _acceptor.OnAccepted += socket =>
+        {
+            _logger.Debug(() => $"[접속] {socket.RemoteEndPoint} 수신됨");
+            _userObjectPoolManager.AcceptUser(socket);
+        };
+        _acceptor.Init();
     }
 
-    public async Task StartAsync()
+    public void Start()
     {
-        _listener = new TcpListener(IPAddress.Any, _port);
-        _listener.Start();
+        _logger.Info(() => $"[서버 시작] 포트 {_port}에서 수신 대기...");
 
-        _logger.Info(() => $"[서버 시작] 포트 {_port} 에서 연결 대기 중...");
+        _acceptor.Start();
+        _shutdownEvent.WaitOne();
+    }
 
-        while (true)
-        {
-            var client = await _listener.AcceptTcpClientAsync();
-            _logger.Debug(() => $"[접속] 클라이언트 연결됨");
+    public void Stop()
+    {
+        _logger.Info(() => $"[서버 종료 요청]");
 
-            var socket = client.Client;
-            _userObjectPoolManager.AcceptUser(socket);
-        }
+        _acceptor.Stop();
+        _shutdownEvent.Set();
     }
 
 }

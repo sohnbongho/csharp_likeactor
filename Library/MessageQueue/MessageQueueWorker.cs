@@ -1,4 +1,5 @@
-﻿using Library.Logger;
+﻿using Library.ContInfo;
+using Library.Logger;
 using Library.MessageQueue.Message;
 using System.Threading.Channels;
 
@@ -42,7 +43,7 @@ public class MessageQueueWorker : IAsyncDisposable
                     }
                 }
 
-                await Task.Delay(10); // CPU 보호용
+                await Task.Delay(ThreadConstInfo.MessageQueueThreadDelay); // CPU 보호용
             }
         }
         catch (OperationCanceledException)

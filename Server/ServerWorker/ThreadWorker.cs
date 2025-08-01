@@ -21,7 +21,11 @@ public class ThreadWorker
     }
 
     public void Start() => _thread.Start();
-    public void Stop() => _running = false;
+    public void Stop()
+    {        
+        _running = false;
+        _thread.Join();
+    }
 
     public void Add(ITickable obj)
     {
