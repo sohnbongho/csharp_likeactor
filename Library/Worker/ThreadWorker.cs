@@ -1,9 +1,8 @@
 ﻿using Library.ContInfo;
 using Library.Logger;
-using Server.ServerWorker.Interface;
-using Server.Actors.User;
+using Library.Worker.Interface;
 
-namespace Server.ServerWorker;
+namespace Library.Worker;
 
 public class ThreadWorker
 {
@@ -22,7 +21,7 @@ public class ThreadWorker
 
     public void Start() => _thread.Start();
     public void Stop()
-    {        
+    {
         _running = false;
         _thread.Join();
     }
@@ -37,19 +36,19 @@ public class ThreadWorker
         finally
         {
             _lock.ExitWriteLock();
-        }   
+        }
     }
 
     public void Remove(ITickable obj)
     {
         _lock.EnterWriteLock();
-        try 
-        { 
-            _objs.Remove(obj); 
+        try
+        {
+            _objs.Remove(obj);
         }
-        finally 
-        { 
-            _lock.ExitWriteLock(); 
+        finally
+        {
+            _lock.ExitWriteLock();
         }
     }
 
@@ -59,25 +58,26 @@ public class ThreadWorker
         {
             List<ITickable> objs;
             _lock.EnterReadLock();
-            try 
-            { 
-                objs = _objs.ToList(); 
+            try
+            {
+                objs = _objs.ToList();
             }
-            finally 
-            { 
-                _lock.ExitReadLock(); 
+            finally
+            {
+                _lock.ExitReadLock();
             }
 
-            foreach (var session in objs)
+            try
             {
-                try
+                foreach (var session in objs)
                 {
                     session.Tick();
                 }
-                catch (Exception ex)
-                {
-                    _logger.Error(() => $"[Worker#{_id} TickError] ", ex);
-                }
+            }
+
+            catch (Exception ex)
+            {
+                _logger.Error(() => $"[Worker#{_id} TickError] ", ex);
             }
 
             Thread.Sleep(ThreadConstInfo.TickMillSecond); // Tick 주기

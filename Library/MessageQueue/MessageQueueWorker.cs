@@ -9,12 +9,15 @@ public class MessageQueueWorker : IAsyncDisposable
 {
     private readonly Channel<(IMessageQueueReceiver receiver, IMessageQueue message)> _queue;
     private readonly CancellationTokenSource _cts = new();
-    private readonly Task _processingTask;
+    private Task? _processingTask = null;
     private readonly IServerLogger _logger = ServerLoggerFactory.CreateLogger();
 
     public MessageQueueWorker()
     {
-        _queue = Channel.CreateUnbounded<(IMessageQueueReceiver, IMessageQueue)>();
+        _queue = Channel.CreateUnbounded<(IMessageQueueReceiver, IMessageQueue)>();        
+    }
+    public void Start()
+    {
         _processingTask = Task.Run(ProcessLoopAsync);
     }
 
@@ -59,7 +62,8 @@ public class MessageQueueWorker : IAsyncDisposable
 
         try
         {
-            await _processingTask;
+            if(_processingTask != null)
+                await _processingTask;
         }
         catch (OperationCanceledException)
         {
@@ -67,5 +71,7 @@ public class MessageQueueWorker : IAsyncDisposable
 
         _cts.Dispose();
     }
+
+    
 }
 

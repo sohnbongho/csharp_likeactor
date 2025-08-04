@@ -2,7 +2,7 @@
 
 namespace Library.MessageQueue;
 
-public class MessageQueueWorkerManager
+public class MessageQueueWorkerManager : IAsyncDisposable
 {
     private readonly MessageQueueWorker[] _workers;
     private readonly int _workerCount;
@@ -15,6 +15,13 @@ public class MessageQueueWorkerManager
         for (int i = 0; i < workerCount; i++)
         {
             _workers[i] = new MessageQueueWorker();
+        }
+    }
+    public void Start()
+    {
+        for (int i = 0; i < _workerCount; i++)
+        {
+            _workers[i].Start();
         }
     }
     public MessageQueueWorker GetWorker(ulong sessionId)

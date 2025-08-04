@@ -1,9 +1,9 @@
 ﻿using Library.ContInfo;
 using Library.Logger;
 using Library.MessageQueue;
+using Library.Worker;
 using Server.Acceptor;
 using Server.Actors;
-using Server.ServerWorker;
 
 namespace Server;
 
@@ -27,6 +27,7 @@ public class TcpServer
     }
     public void Init()
     {
+        _messageQueueWorkerManager.Start();
         _threadPoolManager.Start();
         _userObjectPoolManager.Init();
         _acceptor.OnAccepted += socket =>

@@ -1,4 +1,4 @@
-﻿namespace Server.ServerWorker.Interface;
+﻿namespace Library.Worker.Interface;
 
 public interface ITickable
 {

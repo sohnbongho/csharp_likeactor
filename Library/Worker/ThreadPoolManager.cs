@@ -1,6 +1,6 @@
-﻿using Server.ServerWorker.Interface;
+﻿using Library.Worker.Interface;
 
-namespace Server.ServerWorker;
+namespace Library.Worker;
 
 public class ThreadPoolManager
 {

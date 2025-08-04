@@ -1,4 +1,4 @@
-﻿namespace Server.ServerWorker;
+﻿namespace Library.Network;
 
 public static class SessionIdGenerator
 {

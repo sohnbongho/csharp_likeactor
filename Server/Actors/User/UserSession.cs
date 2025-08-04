@@ -3,8 +3,7 @@ using Library.MessageQueue;
 using Library.MessageQueue.Message;
 using Library.Network;
 using Library.Timer;
-using Messages;
-using Server.ServerWorker.Interface;
+using Library.Worker.Interface;
 using System.Net.Sockets;
 
 namespace Server.Actors.User;
@@ -95,7 +94,7 @@ public class UserSession : IDisposable, ITickable, IMessageQueueReceiver, ISessi
 
         return await _messageQueueDispatcher.OnRecvMessageAsync(this, _sender, message);
     }
-    
+
     public void Tick()
     {
         _timerScheduleManager.Tick();

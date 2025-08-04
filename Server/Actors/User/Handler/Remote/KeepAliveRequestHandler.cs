@@ -13,7 +13,7 @@ public class KeepAliveRequestHandler : IRemoteMessageHandlerAsync
     private readonly IServerLogger _logger = ServerLoggerFactory.CreateLogger();
     public async Task<bool> HandleAsync(IMessageQueueReceiver receiver, MessageWrapper message)
     {
-        _logger.Debug(() => $"KeepAliveRequestHandler");
+        _logger.Debug(() => $"[SessionId:{receiver.SessionId}]KeepAliveRequestHandler");
 
         {
             var messageWrapper = new MessageWrapper

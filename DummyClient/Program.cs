@@ -7,6 +7,8 @@ public class Program
         await Task.Delay(1000);
         
         var tcpDummyClient = new TcpDummyClient();
+        tcpDummyClient.Init();
+
         await tcpDummyClient.StartAsync();
     }
 }

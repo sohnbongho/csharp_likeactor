@@ -3,10 +3,9 @@ using Library.MessageQueue;
 using Library.Network;
 using Library.ObjectPool;
 using Library.Worker;
-using Server.Actors.User;
 using System.Net.Sockets;
 
-namespace Server.Actors;
+namespace DummyClient.Session;
 
 public class UserObjectPoolManager
 {
@@ -21,14 +20,18 @@ public class UserObjectPoolManager
     }
     public void Init()
     {
-        _userSessionPool.Init(() => UserSession.Of(SessionIdGenerator.Generate(), this, _messageQueueWorkerManager));
+        _userSessionPool.Init(() => UserSession.Of(
+            new TcpClient(),
+            SessionIdGenerator.Generate(), 
+            this, 
+            _messageQueueWorkerManager));
     }
-    public void AcceptUser(Socket socket)
+    public UserSession RentUser()
     {
-        var session = _userSessionPool.Rent();
-
-        session.Bind(socket);
+        var session = _userSessionPool.Rent();        
         _threadPoolManager.Add(session);
+
+        return session;
     }
     public void RemoveUser(UserSession userSession)
     {
