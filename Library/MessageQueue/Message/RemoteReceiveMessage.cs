@@ -13,16 +13,11 @@ public class RemoteReceiveMessage : IMessageQueue
 
 }
 
-
 public class RemoteSendMessage : IMessageQueue
 {
     public MessageWrapper MessageWrapper { get; set; } = null!;
 }
 
-public class RemoteSendCompleteMessage : IMessageQueue
-{
-    
-}
 
 public class InnerReceiveMessage : IMessageQueue
 {

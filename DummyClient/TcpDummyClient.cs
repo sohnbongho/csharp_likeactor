@@ -18,7 +18,7 @@ public class TcpDummyClient
     private readonly ThreadPoolManager _threadPoolManager;
     private readonly MessageQueueWorkerManager _messageQueueWorkerManager;    
     private readonly ManualResetEvent _shutdownEvent = new(false);
-    private readonly int _maxClientCount = 2;
+    private readonly int _maxClientCount = 1;
     private readonly ConcurrentQueue<UserSession> _connectedUsers = new();
 
     public TcpDummyClient()

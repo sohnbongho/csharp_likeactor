@@ -19,8 +19,8 @@ public class UserSession : IDisposable, IMessageQueueReceiver, ISessionUsable, I
     private readonly MessageQueueWorker _messageQueueWorker;
     private readonly ulong _sessionId;
     private readonly UserObjectPoolManager _userManager;
-    private Task? _task;
-    private CancellationTokenSource? _cts;
+    private readonly MessageQueueDispatcher _messageQueueDispatcher;
+    private bool _disposed;
 
     public ulong SessionId => _sessionId;
 
@@ -29,7 +29,9 @@ public class UserSession : IDisposable, IMessageQueueReceiver, ISessionUsable, I
         UserObjectPoolManager userObjectPoolManager, 
         MessageQueueWorkerManager messageQueueWorkerManager)
     {
-        return new UserSession(client, sessionId, userObjectPoolManager, messageQueueWorkerManager);
+        var user =  new UserSession(client, sessionId, userObjectPoolManager, messageQueueWorkerManager);
+        user.RegisterHandlers();
+        return user;
     }
 
     public UserSession(TcpClient client, ulong sessionId, UserObjectPoolManager userManager,
@@ -43,8 +45,13 @@ public class UserSession : IDisposable, IMessageQueueReceiver, ISessionUsable, I
 
         _receiver = new ReceiverHandler(this, _messageQueueWorker);
         _sender = new SenderHandler();
-    }    
-    
+        _messageQueueDispatcher = new MessageQueueDispatcher();
+    }
+    private void RegisterHandlers()
+    {
+        _messageQueueDispatcher.RegisterHandlers();
+    }
+
     public async Task ConnectAsync(string host, int port)
     {
         await _client.ConnectAsync(host, port);
@@ -62,8 +69,12 @@ public class UserSession : IDisposable, IMessageQueueReceiver, ISessionUsable, I
     {
         _logger.Debug(() => $"[SessionId:{SessionId}] Run...");
 
-        _cts = new CancellationTokenSource();
-        _task = StartAsync(_cts.Token);
+        var message = new MessageWrapper
+        {
+            KeepAliveRequest = new KeepAliveRequest { }
+        };
+
+        _sender.Send(message);
     }
 
     private async Task StartAsync(CancellationToken cancellationToken)
@@ -71,13 +82,7 @@ public class UserSession : IDisposable, IMessageQueueReceiver, ISessionUsable, I
         try
         {
             while (!cancellationToken.IsCancellationRequested)
-            {
-                var message = new MessageWrapper
-                {
-                    KeepAliveRequest = new KeepAliveRequest { }
-                };
-
-                _sender.Send(message);
+            {                
                 _logger.Debug(() => $"[SessionId:{SessionId}][송신] KeepAliveRequest #{++_counter} 전송");
 
                 await Task.Delay(1000, cancellationToken);
@@ -99,20 +104,12 @@ public class UserSession : IDisposable, IMessageQueueReceiver, ISessionUsable, I
         _logger.Debug(() => $"[SessionId:{SessionId}] OnRecvMessage type:{messageWrapper.PayloadCase.ToString()}");
     }
 
-    public Task<bool> OnRecvMessageAsync(IMessageQueue message)
+    public async Task<bool> OnRecvMessageAsync(IMessageQueue message)
     {
-        if (message is RemoteReceiveMessage receiveMessage)
-        {
-            OnRecvMessage(receiveMessage.MessageWrapper);
-        }
-        else if (message is RemoteSendMessage sendMessage)
-        {
-            if (_sender != null)
-            {
-                _sender.Send(sendMessage.MessageWrapper);
-            }
-        }
-        return Task.FromResult(true);
+        if (_disposed)
+            return false;
+
+        return await _messageQueueDispatcher.OnRecvMessageAsync(this, _sender, message);
     }
 
     public async Task<bool> EnqueueMessageAsync(IMessageQueue message)
@@ -121,11 +118,9 @@ public class UserSession : IDisposable, IMessageQueueReceiver, ISessionUsable, I
         return true;
     }
     public void Stop()
-    {
-        _cts?.Cancel();
+    {        
         try
-        {
-            _task?.Wait();
+        {            
         }
         catch (AggregateException ex) when (ex.InnerException is OperationCanceledException)
         {
@@ -143,6 +138,7 @@ public class UserSession : IDisposable, IMessageQueueReceiver, ISessionUsable, I
     }
     public void Dispose()
     {
+        _disposed = true;
         _client?.Dispose();
         _stream?.Dispose();
     }
