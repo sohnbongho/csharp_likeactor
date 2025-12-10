@@ -2,11 +2,10 @@
 using Library.Logger;
 using Library.Worker.Interface;
 using System.Collections.Concurrent;
-using System.Threading;
 
 namespace Library.Worker;
 
-public class ThreadWorker
+public class TickThreadWorker
 {
     private readonly IServerLogger _logger = ServerLoggerFactory.CreateLogger();
     private readonly ConcurrentDictionary<ulong, ITickable> _sessions = new();
@@ -14,7 +13,7 @@ public class ThreadWorker
     private readonly int _id;
     private readonly CancellationTokenSource _cts = new();
 
-    public ThreadWorker(int id)
+    public TickThreadWorker(int id)
     {
         _id = id;
         _thread = new Thread(Run) { IsBackground = true };

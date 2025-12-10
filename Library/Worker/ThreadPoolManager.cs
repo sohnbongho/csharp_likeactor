@@ -5,19 +5,19 @@ namespace Library.Worker;
 public class ThreadPoolManager
 {
     private readonly int _threadCount;
-    private readonly ThreadWorker[] _workers;
+    private readonly TickThreadWorker[] _workers;
 
     public ThreadPoolManager(int threadCount)
     {
         _threadCount = threadCount;
-        _workers = new ThreadWorker[threadCount];
+        _workers = new TickThreadWorker[threadCount];
         
     }
     public void Start()
     {
         for (int i = 0; i < _threadCount; i++)
         {
-            _workers[i] = new ThreadWorker(i);
+            _workers[i] = new TickThreadWorker(i);
             _workers[i].Start();
         }
     }
