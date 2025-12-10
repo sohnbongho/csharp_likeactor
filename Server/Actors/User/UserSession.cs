@@ -97,6 +97,7 @@ public class UserSession : IDisposable, ITickable, IMessageQueueReceiver, ISessi
 
     public void Tick()
     {
+        //_logger.Debug(() => "Tick()");
         _timerScheduleManager.Tick();
     }
 

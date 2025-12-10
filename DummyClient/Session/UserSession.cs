@@ -144,9 +144,7 @@ public class UserSession : IDisposable, IMessageQueueReceiver, ISessionUsable, I
     }
 
     public void Tick()
-    {
-        
+    {        
     }
-
     
 }
