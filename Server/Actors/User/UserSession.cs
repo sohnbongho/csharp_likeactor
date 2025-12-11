@@ -73,16 +73,20 @@ public class UserSession : IDisposable, ITickable, IMessageQueueReceiver, ISessi
 
     public void Dispose()
     {
-        _timerScheduleManager.Dispose();
-        _receiver.Dispose();
-        _sender.Dispose();
+        if (_disposed)
+            return;
+
+        _disposed = true;
 
         if (_userConnection != null)
         {
-            _userConnection.Dispose();
+            _userConnection.Dispose(); // 소켓을 먼저 닫아 수신 루프를 즉시 끊는다
             _userConnection = null;
         }
-        _disposed = true;
+
+        _timerScheduleManager.Dispose();
+        _receiver.Dispose();
+        _sender.Dispose();
 
         _userManager.RemoveUser(this);
     }

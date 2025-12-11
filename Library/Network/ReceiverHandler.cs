@@ -87,8 +87,27 @@ public class ReceiverHandler : IDisposable
 
     public void Dispose()
     {
+        // 종료 요청 시 수신 루프를 끊기 위해 소켓을 닫는다
+        if (_socket != null)
+        {
+            try
+            {
+                _socket.Shutdown(SocketShutdown.Both);
+            }
+            catch
+            {
+                // 이미 닫힌 경우 무시
+            }
+            try
+            {
+                _socket.Close();
+            }
+            catch
+            {
+            }
+            _socket = null;
+        }
         _parser.Dispose();
-        _socket = null;
     }
 }
 
