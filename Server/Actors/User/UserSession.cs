@@ -14,15 +14,15 @@ public class UserSession : IDisposable, ITickable, IMessageQueueReceiver, ISessi
 
     private readonly IServerLogger _logger = ServerLoggerFactory.CreateLogger();
 
-    private readonly ReceiverHandler _receiver;
-    private readonly SenderHandler _sender;
+    private ReceiverHandler _receiver;
+    private SenderHandler _sender;
     private UserConnectionComponent? _userConnection;
 
-    private readonly MessageQueueWorker _messageQueueWorker;
+    private MessageQueueWorker _messageQueueWorker;
     private readonly MessageQueueDispatcher _messageQueueDispatcher;
-    private readonly TimerScheduleManager _timerScheduleManager;
+    private TimerScheduleManager _timerScheduleManager;
 
-    private readonly ulong _sessionId;
+    private ulong _sessionId;
     private bool _disposed;
 
     private readonly UserObjectPoolManager _userManager;
@@ -46,8 +46,7 @@ public class UserSession : IDisposable, ITickable, IMessageQueueReceiver, ISessi
         _userManager = userManager;
         _sessionId = sessionId;
         _messageQueueDispatcher = new MessageQueueDispatcher();
-        var messageQueueWorker = workerManager.GetWorker(sessionId);
-        _messageQueueWorker = messageQueueWorker;
+        _messageQueueWorker = workerManager.GetWorker(sessionId);
 
         _timerScheduleManager = new TimerScheduleManager();
         _receiver = new ReceiverHandler(this, _messageQueueWorker);
@@ -57,6 +56,23 @@ public class UserSession : IDisposable, ITickable, IMessageQueueReceiver, ISessi
     private void RegisterHandlers()
     {
         _messageQueueDispatcher.RegisterHandlers();
+    }
+
+    public void Reinitialize(ulong sessionId, MessageQueueWorkerManager workerManager)
+    {
+        _sessionId = sessionId;
+        _messageQueueWorker = workerManager.GetWorker(sessionId);
+
+        // 이전 자원 정리
+        _timerScheduleManager.Dispose();
+        _receiver.Dispose();
+        _sender.Dispose();
+
+        // 새 컴포넌트로 교체
+        _timerScheduleManager = new TimerScheduleManager();
+        _receiver = new ReceiverHandler(this, _messageQueueWorker);
+        _sender = new SenderHandler();
+        _disposed = false;
     }
 
 

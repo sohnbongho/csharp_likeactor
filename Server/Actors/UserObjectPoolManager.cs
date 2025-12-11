@@ -32,6 +32,7 @@ public class UserObjectPoolManager
             return;
 
         var session = _userSessionPool.Rent();
+        session.Reinitialize(SessionIdGenerator.Generate(), _messageQueueWorkerManager);
         _activeSessions.TryAdd(session.SessionId, session);
 
         session.Bind(socket);
