@@ -59,10 +59,21 @@ public class TCPAcceptor
 
         args.AcceptSocket = null;
 
-        bool pending = _listener.AcceptAsync(args);
-        if (!pending)
+        try
         {
-            ProcessAccept(args);
+            bool pending = _listener.AcceptAsync(args);
+            if (!pending)
+            {
+                ProcessAccept(args);
+            }
+        }
+        catch (ObjectDisposedException)
+        {
+            // 리스너가 이미 종료된 경우 조용히 무시
+        }
+        catch (SocketException se) when (se.SocketErrorCode == SocketError.OperationAborted)
+        {
+            // 종료 과정에서 발생하는 abort 오류 무시
         }
     }
 
@@ -74,6 +85,11 @@ public class TCPAcceptor
     private void ProcessAccept(SocketAsyncEventArgs e)
     {
         if (_stopping)
+        {
+            return;
+        }
+
+        if (e.SocketError == SocketError.OperationAborted)
         {
             return;
         }
