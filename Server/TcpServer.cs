@@ -50,7 +50,16 @@ public class TcpServer
     {
         _logger.Info(() => $"Stop Server");
 
+        // 신규 수락 중단
         _acceptor.Stop();
+
+        // 활성 세션 종료
+        _userObjectPoolManager.ShutdownAll();
+
+        // 워커/스레드풀 정지
+        _threadPoolManager.StopAll();
+        _messageQueueWorkerManager.DisposeAsync().AsTask().GetAwaiter().GetResult();
+
         _shutdownEvent.Set();
     }
 

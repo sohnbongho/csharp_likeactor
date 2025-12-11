@@ -12,6 +12,7 @@ public class TCPAcceptor
     private readonly int _maxPoolCount;
     private readonly SocketAsyncEventArgsPool _acceptArgsPool;
     private readonly IServerLogger _logger = ServerLoggerFactory.CreateLogger();
+    private volatile bool _stopping;
 
     public event Action<Socket>? OnAccepted;
 
@@ -38,6 +39,7 @@ public class TCPAcceptor
 
     public void Start()
     {
+        _stopping = false;
         for (int i = 0; i < _maxConnections; i++)
         {
             StartAccept();
@@ -46,6 +48,9 @@ public class TCPAcceptor
 
     private void StartAccept()
     {
+        if (_stopping)
+            return;
+
         if (!_acceptArgsPool.TryPop(out var args))
             return;
 
@@ -68,6 +73,11 @@ public class TCPAcceptor
 
     private void ProcessAccept(SocketAsyncEventArgs e)
     {
+        if (_stopping)
+        {
+            return;
+        }
+
         if (e.SocketError == SocketError.Success && e.AcceptSocket != null)
         {
             OnAccepted?.Invoke(e.AcceptSocket);
@@ -85,6 +95,7 @@ public class TCPAcceptor
     {
         try
         {
+            _stopping = true;
             _listener.Close(); // 소켓 닫고
         }
         catch (Exception ex)
