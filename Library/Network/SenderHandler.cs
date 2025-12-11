@@ -2,6 +2,7 @@
 using Library.ContInfo;
 using Library.Logger;
 using Messages;
+using System.Collections.Concurrent;
 using System.Net.Sockets;
 
 namespace Library.Network;
@@ -12,8 +13,8 @@ public class SenderHandler : IDisposable
     private Socket? _socket;
     private readonly SocketAsyncEventArgs _sendEventArgs;
     private readonly byte[] _sendBuffer = new byte[SessionConstInfo.MaxBufferSize];
-    private readonly Queue<MessageWrapper> _pendingSendQueue = new();
-    private bool _isSending = false;
+    private readonly ConcurrentQueue<MessageWrapper> _pendingSendQueue = new();
+    private int _isSending = 0; // 0: idle, 1: sending
 
     public SenderHandler()
     {
@@ -27,16 +28,15 @@ public class SenderHandler : IDisposable
     public void Dispose()
     {
         _socket = null;
+        while (_pendingSendQueue.TryDequeue(out _)) { }
+        Interlocked.Exchange(ref _isSending, 0);
     }
 
     public bool Send(MessageWrapper message)
     {
-        lock (_pendingSendQueue)
-        {
-            _pendingSendQueue.Enqueue(message);
-            if (_isSending) return true; // 이미 처리 중이면 큐에만 넣음
-            _isSending = true;
-        }
+        _pendingSendQueue.Enqueue(message);
+        if (Interlocked.CompareExchange(ref _isSending, 1, 0) == 1)
+            return true; // 이미 처리 중이면 큐에만 넣음
 
         return ProcessSendQueue();
 
@@ -45,18 +45,15 @@ public class SenderHandler : IDisposable
     private bool ProcessSendQueue()
     {
         if (_socket == null)
-            return false;
-
-        MessageWrapper? message;
-
-        lock (_pendingSendQueue)
         {
-            if (_pendingSendQueue.Count == 0)
-            {
-                _isSending = false;
-                return true;
-            }
-            message = _pendingSendQueue.Dequeue();
+            Interlocked.Exchange(ref _isSending, 0);
+            return false;
+        }
+
+        if (!_pendingSendQueue.TryDequeue(out var message))
+        {
+            Interlocked.Exchange(ref _isSending, 0);
+            return true;
         }
 
         // 직렬화 및 SocketAsyncEventArgs 처리
@@ -94,7 +91,9 @@ public class SenderHandler : IDisposable
         if (e.SocketError != SocketError.Success)
         {
             _logger.Info(() => "Send Error");
-            _isSending = false;
+            // 소켓 오류가 발생하면 세션 종료를 트리거하기 위해 송신을 중단
+            (_socket as ISessionUsable)?.Disconnect();
+            Interlocked.Exchange(ref _isSending, 0);
             return;
         }
         // 다음 메시지 처리
