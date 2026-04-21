@@ -31,6 +31,8 @@ public class MessageQueueWorker : IAsyncDisposable
     {
         try
         {
+            // WaitToReadAsync가 아이템이 없을 때 자연스럽게 대기하므로 busy-spin 걱정 없음.
+            // 예전 Task.Delay(10)은 순수 레이턴시 오버헤드라 제거.
             while (await _queue.Reader.WaitToReadAsync(_cts.Token))
             {
                 while (_queue.Reader.TryRead(out var queue))
@@ -45,8 +47,6 @@ public class MessageQueueWorker : IAsyncDisposable
                         _logger.Error(() => $"Fail QueueWorker ", ex);
                     }
                 }
-
-                await Task.Delay(ThreadConstInfo.MessageQueueThreadDelay); // CPU 보호용
             }
         }
         catch (OperationCanceledException)

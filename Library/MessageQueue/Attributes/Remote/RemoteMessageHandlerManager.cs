@@ -5,80 +5,59 @@ namespace Library.MessageQueue.Attributes.Remote;
 
 public class RemoteMessageHandlerManager
 {
-    private static readonly Dictionary<MessageWrapper.PayloadOneofCase, IRemoteMessageHandler> _cachedSyncHandlers = new();
-    private static readonly Dictionary<MessageWrapper.PayloadOneofCase, IRemoteMessageHandlerAsync> _cachedAsyncHandlers = new();
-    
-    private readonly Dictionary<MessageWrapper.PayloadOneofCase, IRemoteMessageHandler> _syncHandlers = new();
-    private readonly Dictionary<MessageWrapper.PayloadOneofCase, IRemoteMessageHandlerAsync> _asyncHandlers = new();    
-
-    public RemoteMessageHandlerManager()
-    {        
-    }
+    // 핸들러는 stateless이므로 전 세션이 단일 인스턴스를 공유한다.
+    private static readonly Dictionary<MessageWrapper.PayloadOneofCase, IRemoteMessageHandler> _syncHandlers = new();
+    private static readonly Dictionary<MessageWrapper.PayloadOneofCase, IRemoteMessageHandlerAsync> _asyncHandlers = new();
+    private static readonly object _initLock = new();
+    private static volatile bool _initialized;
 
     public void RegisterHandlers()
     {
-        if (_cachedSyncHandlers.Any() == false && _cachedAsyncHandlers.Any() == false)
-        {
-            RegisterCachedHandlers();
-        }
+        if (_initialized)
+            return;
 
-        foreach (var kv in _cachedSyncHandlers)
+        lock (_initLock)
         {
-            var instance = (IRemoteMessageHandler)Activator.CreateInstance(kv.Value.GetType())!;
-            _syncHandlers[kv.Key] = instance;
-        }
+            if (_initialized)
+                return;
 
-        foreach (var kv in _cachedAsyncHandlers)
-        {
-            var instance = (IRemoteMessageHandlerAsync)Activator.CreateInstance(kv.Value.GetType())!;
-            _asyncHandlers[kv.Key] = instance;
-        }
-    }
-    private void RegisterCachedHandlers()
-    {
-        var allTypes = AppDomain.CurrentDomain.GetAssemblies().SelectMany(a => a.GetTypes());
+            var allTypes = AppDomain.CurrentDomain.GetAssemblies().SelectMany(a => a.GetTypes());
 
-        foreach (var type in allTypes)
-        {
-            if (typeof(IRemoteMessageHandler).IsAssignableFrom(type))
+            foreach (var type in allTypes)
             {
-                var attr = type.GetCustomAttribute<RemoteMessageHandlerAttribute>();
-                if (attr != null)
-                    _cachedSyncHandlers[attr.MessageType] = (IRemoteMessageHandler)Activator.CreateInstance(type)!;
+                if (typeof(IRemoteMessageHandler).IsAssignableFrom(type))
+                {
+                    var attr = type.GetCustomAttribute<RemoteMessageHandlerAttribute>();
+                    if (attr != null)
+                        _syncHandlers[attr.MessageType] = (IRemoteMessageHandler)Activator.CreateInstance(type)!;
+                }
+
+                if (typeof(IRemoteMessageHandlerAsync).IsAssignableFrom(type))
+                {
+                    var attr = type.GetCustomAttribute<RemoteMessageHandlerAsyncAttribute>();
+                    if (attr != null)
+                        _asyncHandlers[attr.MessageType] = (IRemoteMessageHandlerAsync)Activator.CreateInstance(type)!;
+                }
             }
 
-            if (typeof(IRemoteMessageHandlerAsync).IsAssignableFrom(type))
-            {
-                var attr = type.GetCustomAttribute<RemoteMessageHandlerAsyncAttribute>();
-                if (attr != null)
-                    _cachedAsyncHandlers[attr.MessageType] = (IRemoteMessageHandlerAsync)Activator.CreateInstance(type)!;
-            }
+            _initialized = true;
         }
     }
 
     public async Task<bool> OnRecvMessageAsync(IMessageQueueReceiver receiver, MessageWrapper message)
     {
-        var payloadCase = message.PayloadCase;
-        if (_asyncHandlers.TryGetValue(payloadCase, out var handler))
-        {
+        if (_asyncHandlers.TryGetValue(message.PayloadCase, out var handler))
             return await handler.HandleAsync(receiver, message);
-        }
-
         return true;
     }
+
     public bool OnRecvMessage(IMessageQueueReceiver receiver, MessageWrapper message)
     {
-        var payloadCase = message.PayloadCase;
-        if (_syncHandlers.TryGetValue(payloadCase, out var handler))
-        {
+        if (_syncHandlers.TryGetValue(message.PayloadCase, out var handler))
             return handler.Handle(receiver, message);
-        }
         return true;
     }
 
-    public bool IsAsync(MessageWrapper.PayloadOneofCase type)
-    {
-        return _asyncHandlers.ContainsKey(type);
-    }
+    public bool IsAsync(MessageWrapper.PayloadOneofCase type) => _asyncHandlers.ContainsKey(type);
 }
 

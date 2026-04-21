@@ -9,5 +9,4 @@ public static class ThreadConstInfo
     public static readonly int MaxMessageQueueWorkerCount = MaxUserThreadCount;
 
     public const int TickMillSecond = 100;          // 초당 10프레임
-    public const int MessageQueueThreadDelay = 10;  // 메시지 큐 CPU 보호용
 }
