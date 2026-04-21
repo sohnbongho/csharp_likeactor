@@ -35,13 +35,15 @@ public class TimerScheduleManager : IDisposable
         }
     }
 
-    public void Dispose()
+    public void Reset()
     {
         lock (_lock)
         {
             _timers.Clear();
         }
     }
+
+    public void Dispose() => Reset();
 
     public void Tick()
     {

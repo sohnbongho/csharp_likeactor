@@ -14,7 +14,6 @@ public class ReceiverHandler : IDisposable
     private readonly IMessageQueueReceiver _receiver;
     private readonly MessageQueueWorker _messageQueueWorker;
     private readonly ReceiveParser _parser;
-    private bool _disposed;
 
     public ReceiverHandler(IMessageQueueReceiver receiver, MessageQueueWorker worker)
     {
@@ -31,6 +30,18 @@ public class ReceiverHandler : IDisposable
     public void Bind(Socket? socket)
     {
         _socket = socket;
+    }
+
+    // 세션 종료 후 pool 반환 직전 호출. SAEA/parser 버퍼 등 재사용 자원은 보존한다.
+    public void Reset()
+    {
+        if (_socket != null)
+        {
+            try { _socket.Shutdown(SocketShutdown.Both); } catch { }
+            try { _socket.Close(); } catch { }
+            _socket = null;
+        }
+        _parser.Reset();
     }
 
     public void StartReceive()
@@ -56,10 +67,7 @@ public class ReceiverHandler : IDisposable
             var messages = _parser.Parse(e.BytesTransferred);
             foreach (var msg in messages)
             {
-                await _messageQueueWorker.EnqueueAsync(_receiver, new RemoteReceiveMessage
-                {
-                    MessageWrapper = msg
-                });
+                await _messageQueueWorker.EnqueueAsync(_receiver, RemoteReceiveMessage.Rent(msg));
             }
 
             StartReceive();
@@ -86,22 +94,12 @@ public class ReceiverHandler : IDisposable
         }
     }
 
+    // 최종 해제: pool 자체가 파기될 때만 호출.
     public void Dispose()
     {
-        if (_disposed)
-            return;
-        _disposed = true;
+        Reset();
 
-        // 먼저 이벤트 구독 해제 → 소켓 종료 시 발생하는 완료 콜백이 재진입하지 않도록
         _receiveEventArgs.Completed -= OnReceiveCompleted;
-
-        if (_socket != null)
-        {
-            try { _socket.Shutdown(SocketShutdown.Both); } catch { }
-            try { _socket.Close(); } catch { }
-            _socket = null;
-        }
-
         _receiveEventArgs.Dispose();
         _parser.Dispose();
     }

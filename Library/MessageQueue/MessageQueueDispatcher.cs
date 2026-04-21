@@ -5,18 +5,18 @@ using Library.Network;
 
 namespace Library.MessageQueue;
 
-public class MessageQueueDispatcher
+// 핸들러 맵이 모두 static이므로 Dispatcher도 세션 전역 싱글톤으로 충분하다.
+// 세션 10,000개 × Dispatcher/Manager 3 객체 = 30,000 객체 할당을 제거.
+public sealed class MessageQueueDispatcher
 {
-    private readonly InnerMessageHandlerManager _innerMessageHandlers;
-    private readonly RemoteMessageHandlerManager _remoteMessageHandlers;
+    public static MessageQueueDispatcher Instance { get; } = new();
 
-    public MessageQueueDispatcher()
+    private readonly InnerMessageHandlerManager _innerMessageHandlers = new();
+    private readonly RemoteMessageHandlerManager _remoteMessageHandlers = new();
+
+    private MessageQueueDispatcher()
     {
-        _innerMessageHandlers = new();
-        _remoteMessageHandlers = new();
-    }
-    public void RegisterHandlers()
-    {
+        // RegisterHandlers는 내부적으로 double-checked lock + initialized 플래그로 1회만 실제 등록.
         _innerMessageHandlers.RegisterHandlers();
         _remoteMessageHandlers.RegisterHandlers();
     }
@@ -26,13 +26,16 @@ public class MessageQueueDispatcher
         if (message is RemoteReceiveMessage receiveMessage)
         {
             var messageWrapper = receiveMessage.MessageWrapper;
-            if (_remoteMessageHandlers.IsAsync(messageWrapper.PayloadCase))
+            try
             {
-                await _remoteMessageHandlers.OnRecvMessageAsync(receiver, messageWrapper);
+                if (_remoteMessageHandlers.IsAsync(messageWrapper.PayloadCase))
+                    await _remoteMessageHandlers.OnRecvMessageAsync(receiver, messageWrapper);
+                else
+                    _remoteMessageHandlers.OnRecvMessage(receiver, messageWrapper);
             }
-            else
+            finally
             {
-                _remoteMessageHandlers.OnRecvMessage(receiver, messageWrapper);
+                // 핸들러 예외 여부와 무관하게 envelope은 반드시 pool로 반환.
                 RemoteReceiveMessage.Return(receiveMessage);
             }
         }
@@ -42,15 +45,11 @@ public class MessageQueueDispatcher
         }
         else if (message is InnerReceiveMessage innerReceiveMessage)
         {
-            var messageWrapper = innerReceiveMessage.Message;
-            if (_innerMessageHandlers.IsAsync(messageWrapper))
-            {
-                await _innerMessageHandlers.OnRecvMessageAsync(receiver, messageWrapper);
-            }
+            var innerMessage = innerReceiveMessage.Message;
+            if (_innerMessageHandlers.IsAsync(innerMessage))
+                await _innerMessageHandlers.OnRecvMessageAsync(receiver, innerMessage);
             else
-            {
-                _innerMessageHandlers.OnRecvMessage(receiver, messageWrapper);
-            }
+                _innerMessageHandlers.OnRecvMessage(receiver, innerMessage);
         }
         return true;
     }

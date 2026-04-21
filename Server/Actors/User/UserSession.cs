@@ -14,13 +14,14 @@ public class UserSession : IDisposable, ITickable, IMessageQueueReceiver, ISessi
 
     private readonly IServerLogger _logger = ServerLoggerFactory.CreateLogger();
 
-    private ReceiverHandler _receiver;
-    private SenderHandler _sender;
+    // pool 수명동안 재사용되는 컴포넌트 — 매 rental마다 할당하지 않는다.
+    private readonly ReceiverHandler _receiver;
+    private readonly SenderHandler _sender;
+    private readonly TimerScheduleManager _timerScheduleManager;
+
     private UserConnectionComponent? _userConnection;
 
     private MessageQueueWorker _messageQueueWorker;
-    private readonly MessageQueueDispatcher _messageQueueDispatcher;
-    private TimerScheduleManager _timerScheduleManager;
 
     private ulong _sessionId;
     private bool _disposed;
@@ -32,10 +33,7 @@ public class UserSession : IDisposable, ITickable, IMessageQueueReceiver, ISessi
         UserObjectPoolManager userManager,
         MessageQueueWorkerManager workerManager)
     {
-        var user = new UserSession(sessionId, userManager, workerManager);
-        user.RegisterHandlers();
-
-        return user;
+        return new UserSession(sessionId, userManager, workerManager);
     }
 
     private UserSession(
@@ -45,17 +43,11 @@ public class UserSession : IDisposable, ITickable, IMessageQueueReceiver, ISessi
     {
         _userManager = userManager;
         _sessionId = sessionId;
-        _messageQueueDispatcher = new MessageQueueDispatcher();
         _messageQueueWorker = workerManager.GetWorker(sessionId);
 
         _timerScheduleManager = new TimerScheduleManager();
         _receiver = new ReceiverHandler(this, _messageQueueWorker);
         _sender = new SenderHandler();
-    }
-
-    private void RegisterHandlers()
-    {
-        _messageQueueDispatcher.RegisterHandlers();
     }
 
     public void Reinitialize(ulong sessionId, MessageQueueWorkerManager workerManager)
@@ -63,15 +55,10 @@ public class UserSession : IDisposable, ITickable, IMessageQueueReceiver, ISessi
         _sessionId = sessionId;
         _messageQueueWorker = workerManager.GetWorker(sessionId);
 
-        // 이전 자원 정리
-        _timerScheduleManager.Dispose();
-        _receiver.Dispose();
-        _sender.Dispose();
-
-        // 새 컴포넌트로 교체
-        _timerScheduleManager = new TimerScheduleManager();
-        _receiver = new ReceiverHandler(this, _messageQueueWorker);
-        _sender = new SenderHandler();
+        // 재사용 컴포넌트는 Reset만: 8KB 송수신 버퍼/SAEA/PriorityQueue 재할당 회피.
+        _timerScheduleManager.Reset();
+        _receiver.Reset();
+        _sender.Reset();
         _disposed = false;
     }
 
@@ -100,9 +87,10 @@ public class UserSession : IDisposable, ITickable, IMessageQueueReceiver, ISessi
             _userConnection = null;
         }
 
-        _timerScheduleManager.Dispose();
-        _receiver.Dispose();
-        _sender.Dispose();
+        // 최종 Dispose가 아니라 pool 반환을 위한 Reset.
+        _timerScheduleManager.Reset();
+        _receiver.Reset();
+        _sender.Reset();
 
         _userManager.RemoveUser(this);
     }
@@ -112,7 +100,7 @@ public class UserSession : IDisposable, ITickable, IMessageQueueReceiver, ISessi
         if (_disposed)
             return false;
 
-        return await _messageQueueDispatcher.OnRecvMessageAsync(this, _sender, message);
+        return await MessageQueueDispatcher.Instance.OnRecvMessageAsync(this, _sender, message);
     }
 
     public void Tick()

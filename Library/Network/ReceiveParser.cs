@@ -90,11 +90,14 @@ public class ReceiveParser : IDisposable
         return messages;
     }
 
-    public void Dispose()
+    // 세션 재사용 시 state machine만 초기화 (버퍼는 유지)
+    public void Reset()
     {
         _state = ReceiveState.Header;
         _bodySize = 0;
         _remainedOffset = 0;
     }
+
+    public void Dispose() => Reset();
 }
 

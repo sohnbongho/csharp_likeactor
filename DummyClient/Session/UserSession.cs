@@ -19,19 +19,16 @@ public class UserSession : IDisposable, IMessageQueueReceiver, ISessionUsable, I
     private readonly MessageQueueWorker _messageQueueWorker;
     private readonly ulong _sessionId;
     private readonly UserObjectPoolManager _userManager;
-    private readonly MessageQueueDispatcher _messageQueueDispatcher;
     private bool _disposed;
 
     public ulong SessionId => _sessionId;
 
-    public static UserSession Of(TcpClient client, ulong 
-        sessionId, 
-        UserObjectPoolManager userObjectPoolManager, 
+    public static UserSession Of(TcpClient client, ulong
+        sessionId,
+        UserObjectPoolManager userObjectPoolManager,
         MessageQueueWorkerManager messageQueueWorkerManager)
     {
-        var user =  new UserSession(client, sessionId, userObjectPoolManager, messageQueueWorkerManager);
-        user.RegisterHandlers();
-        return user;
+        return new UserSession(client, sessionId, userObjectPoolManager, messageQueueWorkerManager);
     }
 
     public UserSession(TcpClient client, ulong sessionId, UserObjectPoolManager userManager,
@@ -45,11 +42,6 @@ public class UserSession : IDisposable, IMessageQueueReceiver, ISessionUsable, I
 
         _receiver = new ReceiverHandler(this, _messageQueueWorker);
         _sender = new SenderHandler();
-        _messageQueueDispatcher = new MessageQueueDispatcher();
-    }
-    private void RegisterHandlers()
-    {
-        _messageQueueDispatcher.RegisterHandlers();
     }
 
     public async Task ConnectAsync(string host, int port)
@@ -109,7 +101,7 @@ public class UserSession : IDisposable, IMessageQueueReceiver, ISessionUsable, I
         if (_disposed)
             return false;
 
-        return await _messageQueueDispatcher.OnRecvMessageAsync(this, _sender, message);
+        return await MessageQueueDispatcher.Instance.OnRecvMessageAsync(this, _sender, message);
     }
 
     public ValueTask<bool> EnqueueMessageAsync(IMessageQueue message)

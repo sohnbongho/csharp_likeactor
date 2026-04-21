@@ -12,7 +12,6 @@ public class SenderHandler : IDisposable
     private readonly IServerLogger _logger = ServerLoggerFactory.CreateLogger();
     private Socket? _socket;
     private Action? _onDisconnect;
-    private bool _disposed;
     private readonly SocketAsyncEventArgs _sendEventArgs;
     private readonly byte[] _sendBuffer = new byte[SessionConstInfo.MaxBufferSize];
     private readonly ConcurrentQueue<MessageWrapper> _pendingSendQueue = new();
@@ -23,24 +22,28 @@ public class SenderHandler : IDisposable
         _sendEventArgs = new SocketAsyncEventArgs();
         _sendEventArgs.Completed += OnSendCompleted;
     }
+
     public void Bind(Socket? socket, Action? onDisconnect = null)
     {
         _socket = socket;
         _onDisconnect = onDisconnect;
     }
-    public void Dispose()
+
+    // 세션 종료 후 pool 반환 직전 호출. SAEA/버퍼 등 재사용 자원은 보존한다.
+    // _socket=null이면 ProcessSendQueue가 자동으로 조기 종료하므로 별도 플래그 불필요.
+    public void Reset()
     {
-        if (_disposed)
-            return;
-        _disposed = true;
-
-        _sendEventArgs.Completed -= OnSendCompleted;
-
         _socket = null;
         _onDisconnect = null;
         while (_pendingSendQueue.TryDequeue(out _)) { }
         Interlocked.Exchange(ref _isSending, 0);
+    }
 
+    // 최종 해제: pool 자체가 파기될 때만 호출.
+    public void Dispose()
+    {
+        Reset();
+        _sendEventArgs.Completed -= OnSendCompleted;
         _sendEventArgs.Dispose();
     }
 
