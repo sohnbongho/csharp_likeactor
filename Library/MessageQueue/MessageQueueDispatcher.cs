@@ -33,6 +33,7 @@ public class MessageQueueDispatcher
             else
             {
                 _remoteMessageHandlers.OnRecvMessage(receiver, messageWrapper);
+                RemoteReceiveMessage.Return(receiveMessage);
             }
         }
         else if (message is RemoteSendMessage sendMessage)
