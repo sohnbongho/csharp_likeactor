@@ -14,14 +14,30 @@ public class MessageQueueWorker : IAsyncDisposable
 
     public MessageQueueWorker()
     {
-        _queue = Channel.CreateUnbounded<(IMessageQueueReceiver, IMessageQueue)>();        
+        // SingleReader=true: 소비자는 ProcessLoopAsync 하나 → Channel이 lock-free 최적화 경로 사용.
+        // AllowSynchronousContinuations=false: 생산자 스레드가 소비자 연속을 인라인으로 돌려 받는 상황 방지.
+        _queue = Channel.CreateUnbounded<(IMessageQueueReceiver, IMessageQueue)>(
+            new UnboundedChannelOptions
+            {
+                SingleReader = true,
+                AllowSynchronousContinuations = false,
+            });
     }
     public void Start()
     {
         _processingTask = Task.Run(ProcessLoopAsync);
     }
 
-    public async Task<bool> EnqueueAsync(IMessageQueueReceiver receiver, IMessageQueue message)
+    public ValueTask<bool> EnqueueAsync(IMessageQueueReceiver receiver, IMessageQueue message)
+    {
+        // Unbounded 채널은 TryWrite가 즉시 성공 → 대부분의 경우 async state machine 할당을 피한다.
+        if (_queue.Writer.TryWrite((receiver, message)))
+            return new ValueTask<bool>(true);
+
+        return EnqueueSlowAsync(receiver, message);
+    }
+
+    private async ValueTask<bool> EnqueueSlowAsync(IMessageQueueReceiver receiver, IMessageQueue message)
     {
         await _queue.Writer.WriteAsync((receiver, message));
         return true;

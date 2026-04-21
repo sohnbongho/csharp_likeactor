@@ -89,23 +89,22 @@ public class SenderHandler : IDisposable
 
             try
             {
-                using var ms = new MemoryStream();
-                message.WriteTo(ms);
-                var body = ms.ToArray();
+                // MemoryStream/ToArray/BitConverter.GetBytes 할당을 피하고 _sendBuffer에 직접 기록한다.
+                int bodyLength = message.CalculateSize();
 
-                if (body.Length > SessionConstInfo.MaxMessageBodySize)
+                if (bodyLength > SessionConstInfo.MaxMessageBodySize)
                 {
-                    _logger.Warn(() => $"메시지 크기 초과 ({body.Length} bytes, 최대 {SessionConstInfo.MaxMessageBodySize}), 해당 메시지 드롭");
+                    _logger.Warn(() => $"메시지 크기 초과 ({bodyLength} bytes, 최대 {SessionConstInfo.MaxMessageBodySize}), 해당 메시지 드롭");
                     // 파이프라인 정지 방지: 크기 초과 메시지는 드롭하고 다음 메시지를 계속 처리한다.
                     continue;
                 }
 
-                ushort bodyLength = (ushort)body.Length; // 위에서 검증했으므로 안전
+                // 2바이트 little-endian 길이 헤더
+                _sendBuffer[0] = (byte)(bodyLength & 0xFF);
+                _sendBuffer[1] = (byte)((bodyLength >> 8) & 0xFF);
 
-                // length prefix
-                var lengthBytes = BitConverter.GetBytes(bodyLength);
-                Buffer.BlockCopy(lengthBytes, 0, _sendBuffer, 0, 2);
-                Buffer.BlockCopy(body, 0, _sendBuffer, 2, bodyLength);
+                // protobuf 직렬화 결과를 바로 _sendBuffer의 [2..]에 기록 (Span 기반 zero-alloc)
+                message.WriteTo(_sendBuffer.AsSpan(2, bodyLength));
 
                 _sendEventArgs.SetBuffer(_sendBuffer, 0, 2 + bodyLength);
 

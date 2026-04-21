@@ -24,7 +24,7 @@ public class ReceiverHandler : IDisposable
         _parser = new ReceiveParser(SessionConstInfo.MaxBufferSize);
 
         _receiveEventArgs = new SocketAsyncEventArgs();
-        _receiveEventArgs.SetBuffer(_parser.GetBufferSegment().Array, 0, SessionConstInfo.MaxBufferSize);
+        // 실제 버퍼 범위는 StartReceive()에서 _remainedOffset 반영해 매번 설정하므로 여기서는 생략.
         _receiveEventArgs.Completed += OnReceiveCompleted;
     }
 

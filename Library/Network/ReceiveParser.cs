@@ -28,7 +28,8 @@ public class ReceiveParser : IDisposable
 
     public List<MessageWrapper> Parse(int bytesTransferred)
     {
-        var messages = new List<MessageWrapper>();
+        // 한 번의 수신에서 보통 1~수 개 메시지가 나오므로 초기 용량으로 List 리사이즈 할당 회피.
+        var messages = new List<MessageWrapper>(4);
 
         // 이전 호출에서 남긴 partial 바이트(_remainedOffset)는 이미 버퍼 앞부분에 존재하며,
         // 소켓은 GetBufferSegment()가 반환한 offset(_remainedOffset)부터 새 데이터를 기록했다.
