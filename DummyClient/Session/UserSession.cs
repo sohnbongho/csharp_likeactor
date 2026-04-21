@@ -112,10 +112,14 @@ public class UserSession : IDisposable, IMessageQueueReceiver, ISessionUsable, I
         return await _messageQueueDispatcher.OnRecvMessageAsync(this, _sender, message);
     }
 
-    public async Task<bool> EnqueueMessageAsync(IMessageQueue message)
+    public ValueTask<bool> EnqueueMessageAsync(IMessageQueue message)
     {
-        await _messageQueueWorker.EnqueueAsync(this, message);
-        return true;
+        return _messageQueueWorker.EnqueueAsync(this, message);
+    }
+
+    public bool Send(MessageWrapper message)
+    {
+        return _disposed ? false : _sender.Send(message);
     }
     public void Stop()
     {        

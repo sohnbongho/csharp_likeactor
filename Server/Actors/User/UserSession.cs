@@ -121,10 +121,14 @@ public class UserSession : IDisposable, ITickable, IMessageQueueReceiver, ISessi
         _timerScheduleManager.Tick();
     }
 
-    public async Task<bool> EnqueueMessageAsync(IMessageQueue message)
+    public ValueTask<bool> EnqueueMessageAsync(IMessageQueue message)
     {
-        await _messageQueueWorker.EnqueueAsync(this, message);
-        return true;
+        return _messageQueueWorker.EnqueueAsync(this, message);
+    }
+
+    public bool Send(Messages.MessageWrapper message)
+    {
+        return _disposed ? false : _sender.Send(message);
     }
 
     public void Disconnect()

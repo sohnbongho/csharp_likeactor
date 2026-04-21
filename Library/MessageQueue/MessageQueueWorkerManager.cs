@@ -36,10 +36,10 @@ public class MessageQueueWorkerManager : IAsyncDisposable
     }
     
 
-    public async Task EnqueueAsync(IMessageQueueReceiver user, ulong sessionId, IMessageQueue message)
+    public ValueTask<bool> EnqueueAsync(IMessageQueueReceiver user, ulong sessionId, IMessageQueue message)
     {
         int index = GetWorkerIndex(sessionId);
-        await _workers[index].EnqueueAsync(user, message);
+        return _workers[index].EnqueueAsync(user, message);
     }
 
     public async ValueTask DisposeAsync()

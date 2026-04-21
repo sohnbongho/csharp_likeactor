@@ -1,7 +1,6 @@
 ﻿using Library.Logger;
 using Library.MessageQueue;
 using Library.MessageQueue.Attributes.Remote;
-using Library.MessageQueue.Message;
 using Messages;
 
 namespace Server.Actors.User.Handler.Remote;
@@ -11,21 +10,16 @@ namespace Server.Actors.User.Handler.Remote;
 public class KeepAliveRequestHandler : IRemoteMessageHandlerAsync
 {
     private readonly IServerLogger _logger = ServerLoggerFactory.CreateLogger();
-    public async Task<bool> HandleAsync(IMessageQueueReceiver receiver, MessageWrapper message)
+    public Task<bool> HandleAsync(IMessageQueueReceiver receiver, MessageWrapper message)
     {
         _logger.Debug(() => $"[SessionId:{receiver.SessionId}]KeepAliveRequestHandler");
 
+        // Channel→Dispatcher→Sender 한 번 더 거치지 않고 바로 송신 큐에 넣는다.
+        receiver.Send(new MessageWrapper
         {
-            var messageWrapper = new MessageWrapper
-            {
-                KeepAliveNoti = new KeepAliveNoti()
-            };
-            await receiver.EnqueueMessageAsync(new RemoteSendMessage
-            {
-                MessageWrapper = messageWrapper,
-            });
-        }
+            KeepAliveNoti = new KeepAliveNoti()
+        });
 
-        return true;
+        return Task.FromResult(true);
     }
 }
