@@ -30,13 +30,17 @@ public class ReceiveParser : IDisposable
     {
         var messages = new List<MessageWrapper>();
 
+        // 이전 호출에서 남긴 partial 바이트(_remainedOffset)는 이미 버퍼 앞부분에 존재하며,
+        // 소켓은 GetBufferSegment()가 반환한 offset(_remainedOffset)부터 새 데이터를 기록했다.
+        // 따라서 이번 파싱이 보아야 할 총 바이트는 (이전 잔여) + (이번 신규) 이다.
         int readOffset = 0;
-        int remainedSize = bytesTransferred;
-        
+        int remainedSize = _remainedOffset + bytesTransferred;
+        _remainedOffset = 0;
+
         const int _headerSize = 2;
         const int _maxParsingCount = 10000;
 
-        for( int i = 0; i < _maxParsingCount; i++ )
+        for (int i = 0; i < _maxParsingCount; i++)
         {
             if (_state == ReceiveState.Header)
             {
@@ -56,9 +60,8 @@ public class ReceiveParser : IDisposable
             else if (_state == ReceiveState.Body)
             {
                 if (remainedSize < _bodySize)
-                {
                     break;
-                }
+
                 var message = MessageWrapper.Parser.ParseFrom(_buffer.AsSpan(readOffset, _bodySize));
                 messages.Add(message);
 
@@ -66,18 +69,21 @@ public class ReceiveParser : IDisposable
                 readOffset += _bodySize;
                 remainedSize -= _bodySize;
 
-                // 남은 데이터 앞으로 당김                
+                // 완료된 메시지 다음의 잔여 데이터를 버퍼 앞으로 당겨둔다.
                 if (remainedSize > 0)
-                {
                     Buffer.BlockCopy(_buffer, readOffset, _buffer, 0, remainedSize);
-                    _remainedOffset = remainedSize;
-                }
-                else
-                {
-                    _remainedOffset = 0;
-                }
+
                 readOffset = 0;
             }
+        }
+
+        // partial header / partial body 상태로 루프를 빠져나온 경우,
+        // 남은 바이트가 버퍼 중간(readOffset 이후)에 있을 수 있으므로 앞으로 당기고 _remainedOffset을 설정한다.
+        if (remainedSize > 0)
+        {
+            if (readOffset > 0)
+                Buffer.BlockCopy(_buffer, readOffset, _buffer, 0, remainedSize);
+            _remainedOffset = remainedSize;
         }
 
         return messages;

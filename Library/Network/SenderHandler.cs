@@ -63,53 +63,65 @@ public class SenderHandler : IDisposable
     }
     private bool ProcessSendQueue()
     {
-        // 로컬 변수로 캡처 — 이후 Dispose()가 _socket을 null로 바꿔도 NullReferenceException 방지
-        var socket = _socket;
-        if (socket == null)
+        while (true)
         {
-            Interlocked.Exchange(ref _isSending, 0);
-            return false;
-        }
-
-        if (!_pendingSendQueue.TryDequeue(out var message))
-        {
-            Interlocked.Exchange(ref _isSending, 0);
-            return true;
-        }
-
-        try
-        {
-            using var ms = new MemoryStream();
-            message.WriteTo(ms);
-            var body = ms.ToArray();
-
-            if (body.Length > SessionConstInfo.MaxMessageBodySize)
+            // 로컬 변수로 캡처 — 이후 Dispose()가 _socket을 null로 바꿔도 NullReferenceException 방지
+            var socket = _socket;
+            if (socket == null)
             {
-                _logger.Warn(() => $"메시지 크기 초과 ({body.Length} bytes, 최대 {SessionConstInfo.MaxMessageBodySize}), 해당 메시지 드롭");
                 Interlocked.Exchange(ref _isSending, 0);
                 return false;
             }
 
-            ushort bodyLength = (ushort)body.Length; // 위에서 검증했으므로 안전
-
-            // length prefix
-            var lengthBytes = BitConverter.GetBytes(bodyLength);
-            Buffer.BlockCopy(lengthBytes, 0, _sendBuffer, 0, 2);
-            Buffer.BlockCopy(body, 0, _sendBuffer, 2, bodyLength);
-
-            _sendEventArgs.SetBuffer(_sendBuffer, 0, 2 + bodyLength);
-
-            if (!socket.SendAsync(_sendEventArgs))
+            if (!_pendingSendQueue.TryDequeue(out var message))
             {
-                OnSendCompleted(socket, _sendEventArgs);
+                // 큐가 비었으므로 sending 플래그를 내린다.
+                Interlocked.Exchange(ref _isSending, 0);
+
+                // Lost Wakeup 방지: 플래그를 내린 직후 다른 스레드가 Enqueue + CAS를 시도했다가
+                // 아직 1이던 플래그를 보고 빠져나갔을 수 있다. 큐를 재확인해서 있으면 재시도.
+                if (_pendingSendQueue.IsEmpty)
+                    return true;
+                if (Interlocked.CompareExchange(ref _isSending, 1, 0) != 0)
+                    return true; // 다른 스레드가 이미 sending을 잡음
+                continue;
             }
 
-            return true;
-        }
-        catch (Exception ex)
-        {
-            _logger.Error(() => $"SendAsync Error", ex);
-            return false;
+            try
+            {
+                using var ms = new MemoryStream();
+                message.WriteTo(ms);
+                var body = ms.ToArray();
+
+                if (body.Length > SessionConstInfo.MaxMessageBodySize)
+                {
+                    _logger.Warn(() => $"메시지 크기 초과 ({body.Length} bytes, 최대 {SessionConstInfo.MaxMessageBodySize}), 해당 메시지 드롭");
+                    // 파이프라인 정지 방지: 크기 초과 메시지는 드롭하고 다음 메시지를 계속 처리한다.
+                    continue;
+                }
+
+                ushort bodyLength = (ushort)body.Length; // 위에서 검증했으므로 안전
+
+                // length prefix
+                var lengthBytes = BitConverter.GetBytes(bodyLength);
+                Buffer.BlockCopy(lengthBytes, 0, _sendBuffer, 0, 2);
+                Buffer.BlockCopy(body, 0, _sendBuffer, 2, bodyLength);
+
+                _sendEventArgs.SetBuffer(_sendBuffer, 0, 2 + bodyLength);
+
+                if (!socket.SendAsync(_sendEventArgs))
+                {
+                    // 동기 완료 — OnSendCompleted가 다시 ProcessSendQueue를 호출하므로 여기서 종료
+                    OnSendCompleted(socket, _sendEventArgs);
+                }
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(() => $"SendAsync Error", ex);
+                Interlocked.Exchange(ref _isSending, 0);
+                return false;
+            }
         }
     }
 
