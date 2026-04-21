@@ -1,5 +1,6 @@
 ﻿using Library.ContInfo;
 using Library.Logger;
+using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Sockets;
 
@@ -14,6 +15,9 @@ public class TCPAcceptor : IDisposable
     private readonly IServerLogger _logger = ServerLoggerFactory.CreateLogger();
     private volatile bool _stopping;
     private readonly List<SocketAsyncEventArgs> _allArgs = new();
+
+    // IP별 최근 연결 시각 목록 (슬라이딩 윈도우 레이트 리미터)
+    private readonly ConcurrentDictionary<string, Queue<DateTime>> _connectionTimestamps = new();
 
     public event Action<Socket>? OnAccepted;
 
@@ -99,7 +103,14 @@ public class TCPAcceptor : IDisposable
 
         if (e.SocketError == SocketError.Success && e.AcceptSocket != null)
         {
-            OnAccepted?.Invoke(e.AcceptSocket);
+            if (IsRateLimited(e.AcceptSocket))
+            {
+                e.AcceptSocket.Close();
+            }
+            else
+            {
+                OnAccepted?.Invoke(e.AcceptSocket);
+            }
         }
         else
         {
@@ -108,6 +119,34 @@ public class TCPAcceptor : IDisposable
 
         _acceptArgsPool.Push(e);
         StartAccept();
+    }
+
+    private bool IsRateLimited(Socket socket)
+    {
+        var remoteIp = (socket.RemoteEndPoint as IPEndPoint)?.Address.ToString();
+        if (remoteIp == null)
+            return false;
+
+        var now = DateTime.UtcNow;
+        var windowStart = now.AddMinutes(-1);
+
+        var timestamps = _connectionTimestamps.GetOrAdd(remoteIp, _ => new Queue<DateTime>());
+
+        lock (timestamps)
+        {
+            // 1분 지난 항목 제거
+            while (timestamps.Count > 0 && timestamps.Peek() < windowStart)
+                timestamps.Dequeue();
+
+            if (timestamps.Count >= SessionConstInfo.MaxConnectionsPerIpPerMinute)
+            {
+                _logger.Warn(() => $"연결 속도 제한 초과: {remoteIp} ({timestamps.Count}회/분)");
+                return true;
+            }
+
+            timestamps.Enqueue(now);
+            return false;
+        }
     }
 
     public void Stop()

@@ -12,6 +12,12 @@ public class UserConnectionComponent : IDisposable
     {
         _socket = socket;
         _socket.NoDelay = true;
+
+        // 30초 무활동 시 OS가 keepalive 프로브 전송, 3회 실패 시 연결 강제 종료
+        _socket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.KeepAlive, true);
+        _socket.SetSocketOption(SocketOptionLevel.Tcp, SocketOptionName.TcpKeepAliveTime, 30);
+        _socket.SetSocketOption(SocketOptionLevel.Tcp, SocketOptionName.TcpKeepAliveInterval, 5);
+        _socket.SetSocketOption(SocketOptionLevel.Tcp, SocketOptionName.TcpKeepAliveRetryCount, 3);
     }
 
     public void Dispose()

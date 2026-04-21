@@ -73,12 +73,12 @@ public class ReceiverHandler : IDisposable
 
     private void Disconnected()
     {
-        if(_socket != null )
+        if (_socket != null)
         {
-            _socket.Shutdown(SocketShutdown.Both);
+            try { _socket.Shutdown(SocketShutdown.Send); } catch { }
             _socket.Close();
             _socket = null;
-        }        
+        }
 
         if (_receiver is ISessionUsable sessionUsable)
         {

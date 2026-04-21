@@ -64,27 +64,27 @@
 
 ## 🟡 MEDIUM — 성능 저하 또는 장기 운영 문제
 
-- [ ] **워커 스레드 수 부족**
+- [x] **워커 스레드 수 부족**
   - 파일: `Library/ContInfo/ThreadConstInfo.cs:5`
   - 문제: `MaxUserThreadCount = 4`로 최대 10,000 세션 처리 → Tick 하나 지연 시 전체 세션 굶음
   - 수정: 하드코딩 대신 CPU 코어 수 기반 동적 설정 고려
 
-- [ ] **유저별 타이머 무제한 등록**
+- [x] **유저별 타이머 무제한 등록**
   - 파일: `Library/Timer/TimerScheduleManager.cs`
   - 문제: 타이머 리스트 용량 제한 없음 → 버그 있는 핸들러가 타이머 무한 등록 시 세션당 메모리 고갈
   - 수정: 세션당 최대 타이머 수 제한 추가
 
-- [ ] **소켓 비우아한 종료 (TCP RST)**
+- [x] **소켓 비우아한 종료 (TCP RST)**
   - 파일: `Library/Network/ReceiverHandler.cs:77`
   - 문제: `SocketShutdown.Both` 즉시 호출 → FIN 대신 RST 전송, 전송 중 데이터 유실 가능
   - 수정: `SocketShutdown.Send` → 수신 완료 대기 → 소켓 닫기 순서로 변경
 
-- [ ] **연결 타임아웃 없음**
+- [x] **연결 타임아웃 없음**
   - 파일: `Server/Acceptor/Acceptor.cs`
   - 문제: 접속 후 아무것도 하지 않는 클라이언트를 무한 유지 → 슬롯 고갈 공격 가능
   - 수정: 미활동 세션 타임아웃(예: 30초) 추가
 
-- [ ] **연결 속도 제한 없음**
+- [x] **연결 속도 제한 없음**
   - 파일: `Server/Acceptor/Acceptor.cs`
   - 문제: 초당 수천 개 연결 요청 무제한 수락 → SYN Flood 취약
   - 수정: IP당 연결 속도 제한 또는 최대 대기 연결 수 제한

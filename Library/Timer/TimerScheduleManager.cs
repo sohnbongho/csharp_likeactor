@@ -1,4 +1,5 @@
-﻿using Library.Logger;
+﻿using Library.ContInfo;
+using Library.Logger;
 using Library.Timer.Message;
 using System.Diagnostics;
 
@@ -24,6 +25,11 @@ public class TimerScheduleManager : IDisposable
 
         lock (_lock)
         {
+            if (_timers.Count >= SessionConstInfo.MaxTimerPerSession)
+            {
+                _logger.Warn(() => $"타이머 한도 초과 ({SessionConstInfo.MaxTimerPerSession}), 등록 무시");
+                return;
+            }
             _timers.Add(timer);
         }
     }
