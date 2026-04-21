@@ -19,6 +19,10 @@ public class TCPAcceptor : IDisposable
     // IP별 최근 연결 시각 목록 (슬라이딩 윈도우 레이트 리미터)
     private readonly ConcurrentDictionary<string, Queue<DateTime>> _connectionTimestamps = new();
 
+    // 만료된 IP 엔트리 정리 주기. IP 로테이션 공격으로 dict가 무한 증식하는 것을 방지.
+    private long _lastSweepTicks;
+    private const int SweepIntervalSeconds = 60;
+
     public event Action<Socket>? OnAccepted;
 
     public TCPAcceptor(int port, int maxConnections = SessionConstInfo.MaxAcceptSessionCount)
@@ -132,6 +136,7 @@ public class TCPAcceptor : IDisposable
 
         var timestamps = _connectionTimestamps.GetOrAdd(remoteIp, _ => new Queue<DateTime>());
 
+        bool limited;
         lock (timestamps)
         {
             // 1분 지난 항목 제거
@@ -141,11 +146,41 @@ public class TCPAcceptor : IDisposable
             if (timestamps.Count >= SessionConstInfo.MaxConnectionsPerIpPerMinute)
             {
                 _logger.Warn(() => $"연결 속도 제한 초과: {remoteIp} ({timestamps.Count}회/분)");
-                return true;
+                limited = true;
             }
+            else
+            {
+                timestamps.Enqueue(now);
+                limited = false;
+            }
+        }
 
-            timestamps.Enqueue(now);
-            return false;
+        SweepExpiredIfDue(now, windowStart);
+        return limited;
+    }
+
+    // 주기적으로 만료 엔트리를 dict에서 제거. 단일 스레드만 스위프를 실행하도록 CAS로 방어.
+    private void SweepExpiredIfDue(DateTime now, DateTime windowStart)
+    {
+        var last = Volatile.Read(ref _lastSweepTicks);
+        if (now.Ticks - last < TimeSpan.TicksPerSecond * SweepIntervalSeconds)
+            return;
+
+        if (Interlocked.CompareExchange(ref _lastSweepTicks, now.Ticks, last) != last)
+            return; // 다른 스레드가 이미 스위프 중
+
+        foreach (var kv in _connectionTimestamps)
+        {
+            var q = kv.Value;
+            lock (q)
+            {
+                while (q.Count > 0 && q.Peek() < windowStart)
+                    q.Dequeue();
+
+                // 빈 큐는 dict에서 제거. 락을 계속 들고 있어 concurrent enqueue와 race 없음.
+                if (q.Count == 0)
+                    _connectionTimestamps.TryRemove(kv.Key, out _);
+            }
         }
     }
 

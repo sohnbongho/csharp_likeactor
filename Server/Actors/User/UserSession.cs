@@ -24,7 +24,9 @@ public class UserSession : IDisposable, ITickable, IMessageQueueReceiver, ISessi
     private MessageQueueWorker _messageQueueWorker;
 
     private ulong _sessionId;
-    private bool _disposed;
+    // 0: active, 1: disposed — Interlocked.CompareExchange로 원자 전환.
+    // 두 스레드가 동시에 Dispose를 호출해도 한 쪽만 정리 로직/풀 반환을 수행한다.
+    private int _disposedFlag;
 
     private readonly UserObjectPoolManager _userManager;
 
@@ -59,13 +61,13 @@ public class UserSession : IDisposable, ITickable, IMessageQueueReceiver, ISessi
         _timerScheduleManager.Reset();
         _receiver.Reset();
         _sender.Reset();
-        _disposed = false;
+        Volatile.Write(ref _disposedFlag, 0);
     }
 
 
     public void Bind(Socket socket)
     {
-        _disposed = false;
+        Volatile.Write(ref _disposedFlag, 0);
         _userConnection = new UserConnectionComponent(socket);
 
         _sender.Bind(_userConnection.Socket, Disconnect);
@@ -76,10 +78,9 @@ public class UserSession : IDisposable, ITickable, IMessageQueueReceiver, ISessi
 
     public void Dispose()
     {
-        if (_disposed)
+        // 원자 전환: 0→1에 성공한 스레드만 정리 경로 진입.
+        if (Interlocked.CompareExchange(ref _disposedFlag, 1, 0) != 0)
             return;
-
-        _disposed = true;
 
         if (_userConnection != null)
         {
@@ -97,7 +98,7 @@ public class UserSession : IDisposable, ITickable, IMessageQueueReceiver, ISessi
 
     public async Task<bool> OnRecvMessageAsync(IMessageQueue message)
     {
-        if (_disposed)
+        if (Volatile.Read(ref _disposedFlag) != 0)
             return false;
 
         return await MessageQueueDispatcher.Instance.OnRecvMessageAsync(this, _sender, message);
@@ -116,7 +117,7 @@ public class UserSession : IDisposable, ITickable, IMessageQueueReceiver, ISessi
 
     public bool Send(Messages.MessageWrapper message)
     {
-        return _disposed ? false : _sender.Send(message);
+        return Volatile.Read(ref _disposedFlag) != 0 ? false : _sender.Send(message);
     }
 
     public void Disconnect()

@@ -19,7 +19,8 @@ public class UserSession : IDisposable, IMessageQueueReceiver, ISessionUsable, I
     private readonly MessageQueueWorker _messageQueueWorker;
     private readonly ulong _sessionId;
     private readonly UserObjectPoolManager _userManager;
-    private bool _disposed;
+    // 0: active, 1: disposed — Interlocked로 원자 전환해 double-dispose race 방지.
+    private int _disposedFlag;
 
     public ulong SessionId => _sessionId;
 
@@ -98,7 +99,7 @@ public class UserSession : IDisposable, IMessageQueueReceiver, ISessionUsable, I
 
     public async Task<bool> OnRecvMessageAsync(IMessageQueue message)
     {
-        if (_disposed)
+        if (Volatile.Read(ref _disposedFlag) != 0)
             return false;
 
         return await MessageQueueDispatcher.Instance.OnRecvMessageAsync(this, _sender, message);
@@ -111,7 +112,7 @@ public class UserSession : IDisposable, IMessageQueueReceiver, ISessionUsable, I
 
     public bool Send(MessageWrapper message)
     {
-        return _disposed ? false : _sender.Send(message);
+        return Volatile.Read(ref _disposedFlag) != 0 ? false : _sender.Send(message);
     }
     public void Stop()
     {        
@@ -134,7 +135,10 @@ public class UserSession : IDisposable, IMessageQueueReceiver, ISessionUsable, I
     }
     public void Dispose()
     {
-        _disposed = true;
+        // 원자 전환: 0→1에 성공한 스레드만 정리 경로 진입.
+        if (Interlocked.CompareExchange(ref _disposedFlag, 1, 0) != 0)
+            return;
+
         _client?.Dispose();
         _stream?.Dispose();
     }
