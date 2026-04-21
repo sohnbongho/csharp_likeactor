@@ -26,7 +26,7 @@
   - 문제: 악성 클라이언트가 헤더에 `bodySize=65535` 전송 후 100바이트만 보내면 버퍼 슬롯 영구 독점
   - 수정: `_bodySize > MaxBufferSize` 시 즉시 연결 끊기
 
-- [ ] **Fire-and-Forget 예외 무시**
+- [x] **Fire-and-Forget 예외 무시**
   - 파일: `Library/Network/ReceiverHandler.cs:58`
   - 문제: `_ = _messageQueueWorker.EnqueueAsync(...)` — 예외 발생 시 로그도 없이 묻힘
   - 수정: `async void` 래퍼 또는 예외 캐치 후 로깅

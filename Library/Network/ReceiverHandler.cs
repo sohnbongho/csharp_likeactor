@@ -42,7 +42,7 @@ public class ReceiverHandler : IDisposable
             OnReceiveCompleted(_socket, _receiveEventArgs);
     }
 
-    private void OnReceiveCompleted(object? sender, SocketAsyncEventArgs e)
+    private async void OnReceiveCompleted(object? sender, SocketAsyncEventArgs e)
     {
         try
         {
@@ -56,7 +56,7 @@ public class ReceiverHandler : IDisposable
             var messages = _parser.Parse(e.BytesTransferred);
             foreach (var msg in messages)
             {
-                _ = _messageQueueWorker.EnqueueAsync(_receiver, new RemoteReceiveMessage
+                await _messageQueueWorker.EnqueueAsync(_receiver, new RemoteReceiveMessage
                 {
                     MessageWrapper = msg
                 });
