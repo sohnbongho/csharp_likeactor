@@ -5,7 +5,7 @@ namespace Library.ObjectPool;
 
 public class ObjectPool<T> : IObjectPool<T> where T : class
 {
-    private readonly IServerLogger _logger = ServerLoggerFactory.CreateLogger();
+    private static readonly IServerLogger _logger = ServerLoggerFactory.CreateLogger();
     private readonly ConcurrentQueue<T> _pool = new();
     private readonly int _maxSize;
 

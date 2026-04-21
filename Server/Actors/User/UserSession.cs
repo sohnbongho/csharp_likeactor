@@ -12,7 +12,7 @@ public class UserSession : IDisposable, ITickable, IMessageQueueReceiver, ISessi
 {
     public ulong SessionId => _sessionId;
 
-    private readonly IServerLogger _logger = ServerLoggerFactory.CreateLogger();
+    private static readonly IServerLogger _logger = ServerLoggerFactory.CreateLogger();
 
     // pool 수명동안 재사용되는 컴포넌트 — 매 rental마다 할당하지 않는다.
     private readonly ReceiverHandler _receiver;

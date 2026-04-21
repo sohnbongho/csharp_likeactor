@@ -12,7 +12,7 @@ public class TcpDummyClient
 {
     private const string ServerIp = "127.0.0.1";
     private const int ServerPort = 9000;
-    private readonly IServerLogger _logger = ServerLoggerFactory.CreateLogger();
+    private static readonly IServerLogger _logger = ServerLoggerFactory.CreateLogger();
 
     private readonly UserObjectPoolManager _userObjectPoolManager;
     private readonly ThreadPoolManager _threadPoolManager;

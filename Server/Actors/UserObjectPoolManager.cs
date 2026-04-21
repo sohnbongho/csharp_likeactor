@@ -12,7 +12,7 @@ namespace Server.Actors;
 
 public class UserObjectPoolManager
 {
-    private readonly IServerLogger _logger = ServerLoggerFactory.CreateLogger();
+    private static readonly IServerLogger _logger = ServerLoggerFactory.CreateLogger();
     private readonly IObjectPool<UserSession> _userSessionPool;
     private readonly ThreadPoolManager _threadPoolManager;
     private readonly MessageQueueWorkerManager _messageQueueWorkerManager;
@@ -28,7 +28,9 @@ public class UserObjectPoolManager
     }
     public void Init()
     {
-        _userSessionPool.Init(() => UserSession.Of(SessionIdGenerator.Generate(), this, _messageQueueWorkerManager));
+        // pool 초기 생성 시점의 SessionId는 의미 없음 (AcceptUser에서 Reinitialize로 실제 ID 할당).
+        // Generate를 호출하면 ID 1..N이 쓰이지 않고 버려지므로 placeholder 0 사용.
+        _userSessionPool.Init(() => UserSession.Of(0, this, _messageQueueWorkerManager));
     }
     public void AcceptUser(Socket socket)
     {

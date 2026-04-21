@@ -10,7 +10,7 @@ namespace Server;
 public class TcpServer
 {
     private readonly int _port;
-    private readonly IServerLogger _logger = ServerLoggerFactory.CreateLogger();
+    private static readonly IServerLogger _logger = ServerLoggerFactory.CreateLogger();
     private readonly UserObjectPoolManager _userObjectPoolManager;
     private readonly ThreadPoolManager _threadPoolManager;
     private readonly MessageQueueWorkerManager _messageQueueWorkerManager;

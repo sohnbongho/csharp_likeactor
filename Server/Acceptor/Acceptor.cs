@@ -12,7 +12,7 @@ public class TCPAcceptor : IDisposable
     private readonly int _maxConnections;
     private readonly int _maxPoolCount;
     private readonly SocketAsyncEventArgsPool _acceptArgsPool;
-    private readonly IServerLogger _logger = ServerLoggerFactory.CreateLogger();
+    private static readonly IServerLogger _logger = ServerLoggerFactory.CreateLogger();
     private volatile bool _stopping;
     private readonly List<SocketAsyncEventArgs> _allArgs = new();
 

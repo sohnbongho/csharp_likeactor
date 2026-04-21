@@ -11,9 +11,7 @@ namespace DummyClient.Session;
 public class UserSession : IDisposable, IMessageQueueReceiver, ISessionUsable, ITickable
 {
     private readonly TcpClient _client;
-    private NetworkStream _stream = null!;
-    private int _counter = 0;    
-    private readonly IServerLogger _logger = ServerLoggerFactory.CreateLogger();
+    private static readonly IServerLogger _logger = ServerLoggerFactory.CreateLogger();
     private readonly SenderHandler _sender;
     private readonly ReceiverHandler _receiver;
     private readonly MessageQueueWorker _messageQueueWorker;
@@ -38,8 +36,7 @@ public class UserSession : IDisposable, IMessageQueueReceiver, ISessionUsable, I
         _client = client;
         _sessionId = sessionId;
         _userManager = userManager;
-        var messageQueueWorker = workerManager.GetWorker(sessionId);
-        _messageQueueWorker = messageQueueWorker;
+        _messageQueueWorker = workerManager.GetWorker(sessionId);
 
         _receiver = new ReceiverHandler(this, _messageQueueWorker);
         _sender = new SenderHandler();
@@ -48,53 +45,21 @@ public class UserSession : IDisposable, IMessageQueueReceiver, ISessionUsable, I
     public async Task ConnectAsync(string host, int port)
     {
         await _client.ConnectAsync(host, port);
-        _stream = _client.GetStream();
 
         var socket = _client.Client;
-
         _sender.Bind(socket);
-
         _receiver.Bind(socket);
         _receiver.StartReceive();
-        
     }
+
     public void Run()
     {
         _logger.Debug(() => $"[SessionId:{SessionId}] Run...");
 
-        var message = new MessageWrapper
+        _sender.Send(new MessageWrapper
         {
-            KeepAliveRequest = new KeepAliveRequest { }
-        };
-
-        _sender.Send(message);
-    }
-
-    private async Task StartAsync(CancellationToken cancellationToken)
-    {
-        try
-        {
-            while (!cancellationToken.IsCancellationRequested)
-            {                
-                _logger.Debug(() => $"[SessionId:{SessionId}][송신] KeepAliveRequest #{++_counter} 전송");
-
-                await Task.Delay(1000, cancellationToken);
-            }
-        }
-        catch (OperationCanceledException)
-        {
-            _logger.Info(() => $"[SessionId:{SessionId}][종료] KeepAlive 루프가 취소되었습니다.");
-        }
-        catch (Exception ex)
-        {
-            _logger.Error(() => $"[SessionId:{SessionId}][오류] KeepAlive 루프 실행 중 예외 발생: {ex}", ex);
-        }
-    }
-
-
-    public void OnRecvMessage(MessageWrapper messageWrapper)
-    {
-        _logger.Debug(() => $"[SessionId:{SessionId}] OnRecvMessage type:{messageWrapper.PayloadCase.ToString()}");
+            KeepAliveRequest = new KeepAliveRequest()
+        });
     }
 
     public async Task<bool> OnRecvMessageAsync(IMessageQueue message)
@@ -112,27 +77,14 @@ public class UserSession : IDisposable, IMessageQueueReceiver, ISessionUsable, I
 
     public bool Send(MessageWrapper message)
     {
-        return Volatile.Read(ref _disposedFlag) != 0 ? false : _sender.Send(message);
+        if(Volatile.Read(ref _disposedFlag) != 0)
+            return false;
+
+        return _sender.Send(message);
     }
-    public void Stop()
-    {        
-        try
-        {            
-        }
-        catch (AggregateException ex) when (ex.InnerException is OperationCanceledException)
-        {
-            // 무시 가능
-        }
-        catch (Exception ex)
-        {
-            _logger.Error(() => $"[SessionId:{SessionId}] [오류] Stop 중 예외", ex);
-        }
-    }
-    public void Disconnect()
-    {
-        Stop();
-        Dispose();
-    }
+
+    public void Disconnect() => Dispose();
+
     public void Dispose()
     {
         // 원자 전환: 0→1에 성공한 스레드만 정리 경로 진입.
@@ -140,11 +92,7 @@ public class UserSession : IDisposable, IMessageQueueReceiver, ISessionUsable, I
             return;
 
         _client?.Dispose();
-        _stream?.Dispose();
     }
 
-    public void Tick()
-    {        
-    }
-    
+    public void Tick() { }
 }

@@ -10,7 +10,7 @@ public class MessageQueueWorker : IAsyncDisposable
     private readonly Channel<(IMessageQueueReceiver receiver, IMessageQueue message)> _queue;
     private readonly CancellationTokenSource _cts = new();
     private Task? _processingTask = null;
-    private readonly IServerLogger _logger = ServerLoggerFactory.CreateLogger();
+    private static readonly IServerLogger _logger = ServerLoggerFactory.CreateLogger();
 
     public MessageQueueWorker()
     {

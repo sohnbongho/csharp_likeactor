@@ -10,7 +10,7 @@ public class TimerScheduleManager : IDisposable
     // 만료시각(정수 틱) 기준 최소 힙 — Add/ExtractExpired O(log n).
     private readonly PriorityQueue<TimerSchedule, long> _timers = new();
     private readonly object _lock = new();
-    private readonly IServerLogger _logger = ServerLoggerFactory.CreateLogger();
+    private static readonly IServerLogger _logger = ServerLoggerFactory.CreateLogger();
 
     public void AddSchedule(
         ITimerMessage message,

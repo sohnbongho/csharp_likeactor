@@ -7,7 +7,7 @@ namespace Library.Worker;
 
 public class TickThreadWorker
 {
-    private readonly IServerLogger _logger = ServerLoggerFactory.CreateLogger();
+    private static readonly IServerLogger _logger = ServerLoggerFactory.CreateLogger();
     private readonly ConcurrentDictionary<ulong, ITickable> _sessions = new();
     private readonly Thread _thread;
     private readonly int _id;

@@ -10,7 +10,7 @@ public class ReceiverHandler : IDisposable
 {
     private Socket? _socket;
     private readonly SocketAsyncEventArgs _receiveEventArgs;
-    private readonly IServerLogger _logger = ServerLoggerFactory.CreateLogger();
+    private static readonly IServerLogger _logger = ServerLoggerFactory.CreateLogger();
     private readonly IMessageQueueReceiver _receiver;
     private readonly MessageQueueWorker _messageQueueWorker;
     private readonly ReceiveParser _parser;

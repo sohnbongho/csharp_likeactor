@@ -9,7 +9,7 @@ namespace Library.Network;
 
 public class SenderHandler : IDisposable
 {
-    private readonly IServerLogger _logger = ServerLoggerFactory.CreateLogger();
+    private static readonly IServerLogger _logger = ServerLoggerFactory.CreateLogger();
     private Socket? _socket;
     private Action? _onDisconnect;
     private readonly SocketAsyncEventArgs _sendEventArgs;
@@ -129,6 +129,12 @@ public class SenderHandler : IDisposable
 
     private void OnSendCompleted(object? sender, SocketAsyncEventArgs e)
     {
+        // 세션 교체 후 들어온 stale 완료 콜백 차단:
+        // sender는 SendAsync를 호출했던 당시의 Socket. 현재 _socket과 다르면 구 세션의 완료.
+        // Reset으로 _socket=null이 된 뒤(또는 새 세션이 Bind로 다른 socket을 할당한 뒤) 호출되는 경우를 모두 커버.
+        if (!ReferenceEquals(sender, _socket))
+            return;
+
         if (e.SocketError != SocketError.Success)
         {
             _logger.Info(() => "Send Error");
