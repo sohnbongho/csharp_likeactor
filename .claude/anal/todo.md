@@ -35,27 +35,27 @@
 
 ## 🟠 HIGH — 고부하 시 크래시 또는 데이터 손실
 
-- [ ] **소켓 Null 레이스 컨디션**
+- [x] **소켓 Null 레이스 컨디션**
   - 파일: `Library/Network/SenderHandler.cs:47,75`
   - 문제: `if (_socket == null)` 체크 후 다른 스레드에서 `Dispose()`로 `_socket = null` 가능 → NullReferenceException
   - 수정: 로컬 변수에 캡처 후 사용, 또는 lock 추가
 
-- [ ] **세션 재사용 타이밍 레이스**
+- [x] **세션 재사용 타이밍 레이스** (TimerScheduleManager 내부 lock으로 안전 확인 — 실제 레이스 없음)
   - 파일: `Server/Actors/User/UserSession.cs:61`, `Library/Worker/TickThreadWorker.cs`
   - 문제: 풀 반환·재초기화 중 Tick 스레드가 이전 세션 `Tick()` 실행 중일 수 있음 → 해제된 객체 접근
   - 수정: 세션 반환 전 Tick 스레드에서 제거 완료 보장
 
-- [ ] **서버 종료 시 레이스 컨디션**
+- [x] **서버 종료 시 레이스 컨디션**
   - 파일: `Server/Actors/UserObjectPoolManager.cs:48`
   - 문제: `_stopping = true` 설정과 동시에 Acceptor 스레드의 `AcceptUser()` 호출 가능 → 일부 세션 미정리
   - 수정: `_stopping` 플래그를 `volatile` 또는 `Interlocked`로 처리, Acceptor 중단 후 세션 정리
 
-- [ ] **이벤트 핸들러 미구독 해제**
+- [x] **이벤트 핸들러 미구독 해제** (CRITICAL #2에서 수정 완료)
   - 파일: `Library/Network/ReceiverHandler.cs:27`
   - 문제: `_receiveEventArgs.Completed += OnReceiveCompleted` 등록 후 `-=` 없음 → Dispose 후에도 GC 수거 불가
   - 수정: `Dispose()`에서 `-= OnReceiveCompleted` 추가
 
-- [ ] **풀 고갈 시 서버 프로세스 사망**
+- [x] **풀 고갈 시 서버 프로세스 사망**
   - 파일: `Library/ObjectPool/ObjectPool.cs:34`
   - 문제: 세션 풀 고갈 시 `InvalidOperationException` throw → Acceptor에서 미처리 시 서버 프로세스 종료
   - 수정: 예외 대신 `null` 반환 후 Acceptor에서 연결 거부 처리

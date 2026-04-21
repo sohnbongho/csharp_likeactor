@@ -34,6 +34,16 @@ public class ObjectPool<T> : IObjectPool<T> where T : class
         throw new InvalidOperationException($"[ObjectPool<{typeof(T).Name}>] Pool exhausted");
     }
 
+    public bool TryRent(out T? obj)
+    {
+        if (_pool.TryDequeue(out obj))
+        {
+            _logger.Debug(() => $"[ObjectPool<{typeof(T).Name}>] Rent Count: {_pool.Count}");
+            return true;
+        }
+        return false;
+    }
+
     public void Return(T obj)
     {
         _pool.Enqueue(obj);

@@ -63,7 +63,9 @@ public class SenderHandler : IDisposable
     }
     private bool ProcessSendQueue()
     {
-        if (_socket == null)
+        // 로컬 변수로 캡처 — 이후 Dispose()가 _socket을 null로 바꿔도 NullReferenceException 방지
+        var socket = _socket;
+        if (socket == null)
         {
             Interlocked.Exchange(ref _isSending, 0);
             return false;
@@ -97,9 +99,9 @@ public class SenderHandler : IDisposable
 
             _sendEventArgs.SetBuffer(_sendBuffer, 0, 2 + bodyLength);
 
-            if (!_socket.SendAsync(_sendEventArgs))
+            if (!socket.SendAsync(_sendEventArgs))
             {
-                OnSendCompleted(_socket, _sendEventArgs);
+                OnSendCompleted(socket, _sendEventArgs);
             }
 
             return true;
