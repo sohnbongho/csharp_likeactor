@@ -72,7 +72,72 @@ public class KeepAliveRequestHandler : IRemoteMessageHandlerAsync
 dotnet build Server/Server.sln                       # 전체 빌드
 dotnet run --project Server/Server.csproj            # 서버 실행
 dotnet run --project DummyClient/DummyClient.csproj  # 테스트 클라이언트
-Scripts/build.bat                                    # proto 재생성
+Scripts/build.bat                                    # proto 재생성 (Windows)
+```
+
+---
+
+## Ubuntu 24.04 배포
+
+### 1. .NET 8 런타임 설치
+
+```bash
+sudo apt-get update
+sudo apt-get install -y dotnet-sdk-8.0
+```
+
+### 2. 파일 디스크립터 한도 상향
+
+동시접속 수가 많을 경우 소켓 수가 기본 한도를 초과할 수 있다.
+
+```bash
+# /etc/security/limits.conf 에 추가
+* soft nofile 65536
+* hard nofile 65536
+```
+
+변경 후 재로그인하거나 `ulimit -n 65536` 으로 현재 세션에 즉시 적용.
+
+### 3. 빌드 및 실행
+
+```bash
+dotnet build Server/Server.sln -c Release
+dotnet run --project Server/Server.csproj -c Release
+```
+
+### 4. 단독 실행 바이너리 배포 (선택)
+
+빌드 서버에서 .NET 없이 실행 가능한 단일 파일 생성:
+
+```bash
+dotnet publish Server/Server.csproj -c Release -r linux-x64 --self-contained -o ./publish
+./publish/Server
+```
+
+### 5. systemd 서비스 등록 (선택)
+
+```ini
+# /etc/systemd/system/mmo-server.service
+[Unit]
+Description=C# MMO Server
+After=network.target
+
+[Service]
+WorkingDirectory=/opt/mmo-server
+ExecStart=/usr/bin/dotnet /opt/mmo-server/Server.dll
+Restart=on-failure
+RestartSec=5
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target
+```
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable mmo-server
+sudo systemctl start mmo-server
+sudo systemctl status mmo-server
 ```
 
 ---
