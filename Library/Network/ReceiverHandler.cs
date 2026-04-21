@@ -14,6 +14,7 @@ public class ReceiverHandler : IDisposable
     private readonly IMessageQueueReceiver _receiver;
     private readonly MessageQueueWorker _messageQueueWorker;
     private readonly ReceiveParser _parser;
+    private bool _disposed;
 
     public ReceiverHandler(IMessageQueueReceiver receiver, MessageQueueWorker worker)
     {
@@ -87,26 +88,21 @@ public class ReceiverHandler : IDisposable
 
     public void Dispose()
     {
-        // 종료 요청 시 수신 루프를 끊기 위해 소켓을 닫는다
+        if (_disposed)
+            return;
+        _disposed = true;
+
+        // 먼저 이벤트 구독 해제 → 소켓 종료 시 발생하는 완료 콜백이 재진입하지 않도록
+        _receiveEventArgs.Completed -= OnReceiveCompleted;
+
         if (_socket != null)
         {
-            try
-            {
-                _socket.Shutdown(SocketShutdown.Both);
-            }
-            catch
-            {
-                // 이미 닫힌 경우 무시
-            }
-            try
-            {
-                _socket.Close();
-            }
-            catch
-            {
-            }
+            try { _socket.Shutdown(SocketShutdown.Both); } catch { }
+            try { _socket.Close(); } catch { }
             _socket = null;
         }
+
+        _receiveEventArgs.Dispose();
         _parser.Dispose();
     }
 }

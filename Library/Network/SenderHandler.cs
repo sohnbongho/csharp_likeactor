@@ -11,6 +11,8 @@ public class SenderHandler : IDisposable
 {
     private readonly IServerLogger _logger = ServerLoggerFactory.CreateLogger();
     private Socket? _socket;
+    private Action? _onDisconnect;
+    private bool _disposed;
     private readonly SocketAsyncEventArgs _sendEventArgs;
     private readonly byte[] _sendBuffer = new byte[SessionConstInfo.MaxBufferSize];
     private readonly ConcurrentQueue<MessageWrapper> _pendingSendQueue = new();
@@ -21,19 +23,36 @@ public class SenderHandler : IDisposable
         _sendEventArgs = new SocketAsyncEventArgs();
         _sendEventArgs.Completed += OnSendCompleted;
     }
-    public void Bind(Socket? socket)
+    public void Bind(Socket? socket, Action? onDisconnect = null)
     {
         _socket = socket;
+        _onDisconnect = onDisconnect;
     }
     public void Dispose()
     {
+        if (_disposed)
+            return;
+        _disposed = true;
+
+        _sendEventArgs.Completed -= OnSendCompleted;
+
         _socket = null;
+        _onDisconnect = null;
         while (_pendingSendQueue.TryDequeue(out _)) { }
         Interlocked.Exchange(ref _isSending, 0);
+
+        _sendEventArgs.Dispose();
     }
 
     public bool Send(MessageWrapper message)
     {
+        if (_pendingSendQueue.Count >= SessionConstInfo.MaxSendQueueSize)
+        {
+            _logger.Warn(() => $"송신 큐 초과 ({SessionConstInfo.MaxSendQueueSize}), 세션 강제 종료");
+            _onDisconnect?.Invoke();
+            return false;
+        }
+
         _pendingSendQueue.Enqueue(message);
         if (Interlocked.CompareExchange(ref _isSending, 1, 0) == 1)
             return true; // 이미 처리 중이면 큐에만 넣음
@@ -56,14 +75,20 @@ public class SenderHandler : IDisposable
             return true;
         }
 
-        // 직렬화 및 SocketAsyncEventArgs 처리
-        // ...
         try
         {
             using var ms = new MemoryStream();
             message.WriteTo(ms);
             var body = ms.ToArray();
-            ushort bodyLength = (ushort)body.Length;
+
+            if (body.Length > SessionConstInfo.MaxMessageBodySize)
+            {
+                _logger.Warn(() => $"메시지 크기 초과 ({body.Length} bytes, 최대 {SessionConstInfo.MaxMessageBodySize}), 해당 메시지 드롭");
+                Interlocked.Exchange(ref _isSending, 0);
+                return false;
+            }
+
+            ushort bodyLength = (ushort)body.Length; // 위에서 검증했으므로 안전
 
             // length prefix
             var lengthBytes = BitConverter.GetBytes(bodyLength);
@@ -91,9 +116,8 @@ public class SenderHandler : IDisposable
         if (e.SocketError != SocketError.Success)
         {
             _logger.Info(() => "Send Error");
-            // 소켓 오류가 발생하면 세션 종료를 트리거하기 위해 송신을 중단
-            (_socket as ISessionUsable)?.Disconnect();
             Interlocked.Exchange(ref _isSending, 0);
+            _onDisconnect?.Invoke();
             return;
         }
         // 다음 메시지 처리

@@ -50,8 +50,8 @@ public class TcpServer
     {
         _logger.Info(() => $"Stop Server");
 
-        // 신규 수락 중단
-        _acceptor.Stop();
+        // 신규 수락 중단 및 args 해제
+        _acceptor.Dispose();
 
         // 활성 세션 종료
         _userObjectPoolManager.ShutdownAll();

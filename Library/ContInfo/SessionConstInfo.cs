@@ -8,6 +8,8 @@ public static class SessionConstInfo
     public const int MaxAcceptSessionCount = 4;
 
     public const int MaxListenerBackLog = 512; // 서버가 동시에 처리하지 못하는 연결 요청을 임시로 쌓아둘 수 있는 큐의 크기
+    public const int MaxSendQueueSize = 200;    // 세션당 최대 송신 큐 크기 (초과 시 해당 세션 강제 종료)
+    public const int MaxMessageBodySize = MaxBufferSize - 2; // 2바이트 길이 헤더를 제외한 메시지 최대 크기
 
 
 }

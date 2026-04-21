@@ -1,4 +1,5 @@
-﻿using Messages;
+﻿using Library.ContInfo;
+using Messages;
 
 namespace Library.Network;
 
@@ -43,6 +44,9 @@ public class ReceiveParser : IDisposable
                     break;
 
                 _bodySize = BitConverter.ToUInt16(_buffer, readOffset);
+
+                if (_bodySize == 0 || _bodySize > SessionConstInfo.MaxMessageBodySize)
+                    throw new InvalidDataException($"유효하지 않은 메시지 크기: {_bodySize} (허용 범위: 1~{SessionConstInfo.MaxMessageBodySize})");
 
                 readOffset += _headerSize;
                 remainedSize -= _headerSize;

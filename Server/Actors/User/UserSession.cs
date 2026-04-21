@@ -81,7 +81,7 @@ public class UserSession : IDisposable, ITickable, IMessageQueueReceiver, ISessi
         _disposed = false;
         _userConnection = new UserConnectionComponent(socket);
 
-        _sender.Bind(_userConnection.Socket);
+        _sender.Bind(_userConnection.Socket, Disconnect);
         _receiver.Bind(_userConnection.Socket);
         _receiver.StartReceive();
     }

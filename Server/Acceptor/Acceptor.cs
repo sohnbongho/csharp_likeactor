@@ -5,7 +5,7 @@ using System.Net.Sockets;
 
 namespace Server.Acceptor;
 
-public class TCPAcceptor
+public class TCPAcceptor : IDisposable
 {
     private readonly Socket _listener;
     private readonly int _maxConnections;
@@ -13,6 +13,7 @@ public class TCPAcceptor
     private readonly SocketAsyncEventArgsPool _acceptArgsPool;
     private readonly IServerLogger _logger = ServerLoggerFactory.CreateLogger();
     private volatile bool _stopping;
+    private readonly List<SocketAsyncEventArgs> _allArgs = new();
 
     public event Action<Socket>? OnAccepted;
 
@@ -33,6 +34,7 @@ public class TCPAcceptor
         {
             var args = new SocketAsyncEventArgs();
             args.Completed += AcceptCompleted;
+            _allArgs.Add(args);
             _acceptArgsPool.Push(args);
         }
     }
@@ -86,6 +88,7 @@ public class TCPAcceptor
     {
         if (_stopping)
         {
+            _acceptArgsPool.Push(e);
             return;
         }
 
@@ -112,12 +115,25 @@ public class TCPAcceptor
         try
         {
             _stopping = true;
-            _listener.Close(); // 소켓 닫고
+            _listener.Close();
         }
         catch (Exception ex)
         {
             _logger.Error(() => $"Exception Stop", ex);
         }
+    }
+
+    public void Dispose()
+    {
+        Stop();
+
+        // 이벤트 해제 후 모든 args 일괄 Dispose
+        foreach (var args in _allArgs)
+        {
+            args.Completed -= AcceptCompleted;
+            args.Dispose();
+        }
+        _allArgs.Clear();
     }
 }
 
