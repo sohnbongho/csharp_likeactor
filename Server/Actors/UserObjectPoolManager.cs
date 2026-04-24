@@ -1,9 +1,8 @@
-﻿using Library.ContInfo;
+using Library.ContInfo;
 using Library.Logger;
-using Library.MessageQueue;
 using Library.Network;
 using Library.ObjectPool;
-using Library.Worker;
+using Library.World;
 using Server.Actors.User;
 using System.Collections.Concurrent;
 using System.Net.Sockets;
@@ -14,27 +13,26 @@ public class UserObjectPoolManager
 {
     private static readonly IServerLogger _logger = ServerLoggerFactory.CreateLogger();
     private readonly IObjectPool<UserSession> _userSessionPool;
-    private readonly ThreadPoolManager _threadPoolManager;
-    private readonly MessageQueueWorkerManager _messageQueueWorkerManager;
+    private readonly LobbyThreadManager _lobbyThreadManager;
+    private readonly WorldThreadManager _worldThreadManager;
     private readonly ConcurrentDictionary<ulong, UserSession> _activeSessions = new();
     private volatile bool _stopping;
     private readonly object _shutdownLock = new();
 
-    public UserObjectPoolManager(ThreadPoolManager threadPoolManager, MessageQueueWorkerManager messageQueueWorkerManager)
+    public UserObjectPoolManager(LobbyThreadManager lobbyThreadManager, WorldThreadManager worldThreadManager)
     {
         _userSessionPool = new ObjectPool<UserSession>(SessionConstInfo.MaxUserSessionPoolSize);
-        _threadPoolManager = threadPoolManager;
-        _messageQueueWorkerManager = messageQueueWorkerManager;
+        _lobbyThreadManager = lobbyThreadManager;
+        _worldThreadManager = worldThreadManager;
     }
+
     public void Init()
     {
-        // pool 초기 생성 시점의 SessionId는 의미 없음 (AcceptUser에서 Reinitialize로 실제 ID 할당).
-        // Generate를 호출하면 ID 1..N이 쓰이지 않고 버려지므로 placeholder 0 사용.
-        _userSessionPool.Init(() => UserSession.Of(0, this, _messageQueueWorkerManager));
+        _userSessionPool.Init(() => UserSession.Of(0, this));
     }
+
     public void AcceptUser(Socket socket)
     {
-        // ShutdownAll과의 레이스 방지: _stopping 확인과 세션 추가를 원자적으로 처리
         lock (_shutdownLock)
         {
             if (_stopping)
@@ -50,23 +48,42 @@ public class UserObjectPoolManager
                 return;
             }
 
-            session.Reinitialize(SessionIdGenerator.Generate(), _messageQueueWorkerManager);
+            session.Reinitialize(SessionIdGenerator.Generate());
             _activeSessions.TryAdd(session.SessionId, session);
-
             session.Bind(socket);
-            _threadPoolManager.Add(session);
+            _lobbyThreadManager.Add(session); // 접속 직후는 항상 로비 스레드
         }
     }
-    public void RemoveUser(UserSession userSession)
+
+    public void RemoveUser(UserSession session)
     {
-        _threadPoolManager.Remove(userSession);
-        _activeSessions.TryRemove(userSession.SessionId, out _);
-        _userSessionPool.Return(userSession);
+        if (session.WorldId == 0)
+            _lobbyThreadManager.Remove(session);
+        else
+            _worldThreadManager.Remove(session, session.WorldId);
+
+        _activeSessions.TryRemove(session.SessionId, out _);
+        _userSessionPool.Return(session);
+    }
+
+    // 반드시 세션의 현재 tick 스레드 내에서 호출할 것 (월드 이동 시 핸들러에서 호출).
+    public void MoveToWorld(UserSession session, ulong worldId)
+    {
+        if (session.WorldId == 0)
+            _lobbyThreadManager.Remove(session);
+        else
+            _worldThreadManager.Remove(session, session.WorldId);
+
+        session.SetWorldId(worldId);
+
+        if (worldId == 0)
+            _lobbyThreadManager.Add(session);
+        else
+            _worldThreadManager.Add(session, worldId);
     }
 
     public void ShutdownAll()
     {
-        // _stopping 설정을 락 안에서 수행 → AcceptUser가 중간에 끼어들지 못하도록
         lock (_shutdownLock)
         {
             _stopping = true;

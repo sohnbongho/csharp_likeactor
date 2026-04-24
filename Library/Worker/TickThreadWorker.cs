@@ -1,7 +1,8 @@
-﻿using Library.ContInfo;
+using Library.ContInfo;
 using Library.Logger;
 using Library.Worker.Interface;
 using System.Collections.Concurrent;
+using System.Diagnostics;
 
 namespace Library.Worker;
 
@@ -9,67 +10,58 @@ public class TickThreadWorker
 {
     private static readonly IServerLogger _logger = ServerLoggerFactory.CreateLogger();
     private readonly ConcurrentDictionary<ulong, ITickable> _sessions = new();
-    private readonly Thread _thread;
     private readonly int _id;
     private readonly CancellationTokenSource _cts = new();
+    private Task? _task;
 
     public TickThreadWorker(int id)
     {
         _id = id;
-        _thread = new Thread(Run) { IsBackground = true };
     }
 
-    public void Start() => _thread.Start();
-
-    public void Stop()
+    public void Start()
     {
-        _cts.Cancel();          // 루프 종료 요청
-        _thread.Join();         // 안전하게 종료 대기
+        _task = Task.Run(RunAsync, _cts.Token);
     }
 
-    public void Add(ITickable obj)
+    public async Task StopAsync()
     {
-        _sessions[obj.SessionId] = obj;
+        _cts.Cancel();
+        if (_task != null)
+        {
+            try { await _task; }
+            catch (OperationCanceledException) { }
+        }
     }
 
-    public void Remove(ITickable obj)
-    {
-        _sessions.TryRemove(obj.SessionId, out _);
-    }
+    public void Add(ITickable obj) => _sessions[obj.SessionId] = obj;
+    public void Remove(ITickable obj) => _sessions.TryRemove(obj.SessionId, out _);
 
-    private void Run()
+    private async Task RunAsync()
     {
         var token = _cts.Token;
-
         while (!token.IsCancellationRequested)
         {
-            try
-            {
-                // snapshot 기반 foreach (ConcurrentDictionary 특징)
-                foreach (var session in _sessions.Values)
-                {
-                    // 혹시라도 Stop()이 들어온 경우 빠르게 빠져나오고 싶으면 체크
-                    if (token.IsCancellationRequested)
-                        break;
+            var start = Stopwatch.GetTimestamp();
 
-                    session.Tick();
+            foreach (var session in _sessions.Values)
+            {
+                if (token.IsCancellationRequested) break;
+                try
+                {
+                    await session.TickAsync();
+                }
+                catch (Exception ex)
+                {
+                    _logger.Error(() => $"[Worker#{_id} TickError]", ex);
                 }
             }
-            catch (Exception ex)
-            {
-                _logger.Error(() => $"[Worker#{_id} TickError] ", ex);
-            }
 
-            // Tick 주기
-            try
+            var remaining = TimeSpan.FromMilliseconds(ThreadConstInfo.TickMillSecond) - Stopwatch.GetElapsedTime(start);
+            if (remaining > TimeSpan.Zero)
             {
-                // Cancel 가능 sleep
-                token.WaitHandle.WaitOne(ThreadConstInfo.TickMillSecond);
-            }
-            catch (ObjectDisposedException)
-            {
-                // cts가 Dispose 된 경우 대비 (원하면 생략 가능)
-                break;
+                try { await Task.Delay(remaining, token); }
+                catch (OperationCanceledException) { break; }
             }
         }
     }

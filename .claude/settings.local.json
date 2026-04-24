@@ -2,7 +2,10 @@
   "permissions": {
     "allow": [
       "Bash(xargs grep *)",
-      "Bash(dotnet build *)"
+      "Bash(dotnet build *)",
+      "Bash(protoc *)",
+      "Bash(cmd.exe /c build.bat)",
+      "Bash(cmd.exe *)"
     ]
   }
 }

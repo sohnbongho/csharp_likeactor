@@ -1,8 +1,7 @@
-﻿using Library.ContInfo;
-using Library.MessageQueue;
+using Library.ContInfo;
 using Library.Network;
 using Library.ObjectPool;
-using Library.Worker;
+using Library.World;
 using System.Net.Sockets;
 
 namespace DummyClient.Session;
@@ -10,32 +9,29 @@ namespace DummyClient.Session;
 public class UserObjectPoolManager
 {
     private readonly IObjectPool<UserSession> _userSessionPool;
-    private readonly ThreadPoolManager _threadPoolManager;
-    private readonly MessageQueueWorkerManager _messageQueueWorkerManager;
-    public UserObjectPoolManager(ThreadPoolManager threadPoolManager, MessageQueueWorkerManager messageQueueWorkerManager)
+    private readonly LobbyThreadManager _lobbyThreadManager;
+
+    public UserObjectPoolManager(LobbyThreadManager lobbyThreadManager)
     {
         _userSessionPool = new ObjectPool<UserSession>(SessionConstInfo.MaxUserSessionPoolSize);
-        _threadPoolManager = threadPoolManager;
-        _messageQueueWorkerManager = messageQueueWorkerManager;
+        _lobbyThreadManager = lobbyThreadManager;
     }
+
     public void Init()
     {
-        _userSessionPool.Init(() => UserSession.Of(
-            new TcpClient(),
-            SessionIdGenerator.Generate(), 
-            this, 
-            _messageQueueWorkerManager));
+        _userSessionPool.Init(() => UserSession.Of(new TcpClient(), SessionIdGenerator.Generate(), this));
     }
+
     public UserSession RentUser()
     {
-        var session = _userSessionPool.Rent();        
-        _threadPoolManager.Add(session);
-
+        var session = _userSessionPool.Rent();
+        _lobbyThreadManager.Add(session);
         return session;
     }
+
     public void RemoveUser(UserSession userSession)
     {
-        _threadPoolManager.Remove(userSession);
+        _lobbyThreadManager.Remove(userSession);
         _userSessionPool.Return(userSession);
     }
 }

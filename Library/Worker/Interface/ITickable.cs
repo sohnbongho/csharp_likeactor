@@ -2,6 +2,6 @@
 
 public interface ITickable
 {
-    void Tick();
+    ValueTask TickAsync();
     ulong SessionId { get; }
 }

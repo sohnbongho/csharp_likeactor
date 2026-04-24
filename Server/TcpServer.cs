@@ -1,7 +1,6 @@
-﻿using Library.ContInfo;
+using Library.ContInfo;
 using Library.Logger;
-using Library.MessageQueue;
-using Library.Worker;
+using Library.World;
 using Server.Acceptor;
 using Server.Actors;
 
@@ -12,23 +11,24 @@ public class TcpServer
     private readonly int _port;
     private static readonly IServerLogger _logger = ServerLoggerFactory.CreateLogger();
     private readonly UserObjectPoolManager _userObjectPoolManager;
-    private readonly ThreadPoolManager _threadPoolManager;
-    private readonly MessageQueueWorkerManager _messageQueueWorkerManager;
+    private readonly LobbyThreadManager _lobbyThreadManager;
+    private readonly WorldThreadManager _worldThreadManager;
     private readonly TCPAcceptor _acceptor;
     private readonly ManualResetEvent _shutdownEvent = new(false);
 
     public TcpServer(int port)
     {
         _port = port;
-        _threadPoolManager = new ThreadPoolManager(ThreadConstInfo.MaxUserThreadCount); // 4개 스레드
-        _messageQueueWorkerManager = new MessageQueueWorkerManager(ThreadConstInfo.MaxMessageQueueWorkerCount); // 4개 스레드
-        _userObjectPoolManager = new UserObjectPoolManager(_threadPoolManager, _messageQueueWorkerManager);
+        _lobbyThreadManager = new LobbyThreadManager();
+        _worldThreadManager = new WorldThreadManager();
+        _userObjectPoolManager = new UserObjectPoolManager(_lobbyThreadManager, _worldThreadManager);
         _acceptor = new TCPAcceptor(port);
     }
+
     public void Init()
     {
-        _messageQueueWorkerManager.Start();
-        _threadPoolManager.Start();
+        _lobbyThreadManager.Start();
+        _worldThreadManager.Start();
         _userObjectPoolManager.Init();
         _acceptor.OnAccepted += socket =>
         {
@@ -41,7 +41,6 @@ public class TcpServer
     public void Start()
     {
         _logger.Info(() => $"Server Start Listen Port:{_port}...");
-
         _acceptor.Start();
         _shutdownEvent.WaitOne();
     }
@@ -50,18 +49,12 @@ public class TcpServer
     {
         _logger.Info(() => $"Stop Server");
 
-        // 신규 수락 중단 및 args 해제
         _acceptor.Dispose();
-
-        // 활성 세션 종료
         _userObjectPoolManager.ShutdownAll();
 
-        // 워커/스레드풀 정지
-        _threadPoolManager.StopAll();
-        _messageQueueWorkerManager.DisposeAsync().AsTask().GetAwaiter().GetResult();
+        _lobbyThreadManager.StopAsync().GetAwaiter().GetResult();
+        _worldThreadManager.StopAllAsync().GetAwaiter().GetResult();
 
         _shutdownEvent.Set();
     }
-
 }
-

@@ -1,4 +1,4 @@
-﻿using Library.ContInfo;
+using Library.ContInfo;
 using Library.Logger;
 using Library.MessageQueue;
 using Library.MessageQueue.Message;
@@ -12,18 +12,13 @@ public class ReceiverHandler : IDisposable
     private readonly SocketAsyncEventArgs _receiveEventArgs;
     private static readonly IServerLogger _logger = ServerLoggerFactory.CreateLogger();
     private readonly IMessageQueueReceiver _receiver;
-    private readonly MessageQueueWorker _messageQueueWorker;
     private readonly ReceiveParser _parser;
 
-    public ReceiverHandler(IMessageQueueReceiver receiver, MessageQueueWorker worker)
+    public ReceiverHandler(IMessageQueueReceiver receiver)
     {
         _receiver = receiver;
-        _messageQueueWorker = worker;
-
         _parser = new ReceiveParser(SessionConstInfo.MaxBufferSize);
-
         _receiveEventArgs = new SocketAsyncEventArgs();
-        // 실제 버퍼 범위는 StartReceive()에서 _remainedOffset 반영해 매번 설정하므로 여기서는 생략.
         _receiveEventArgs.Completed += OnReceiveCompleted;
     }
 
@@ -32,7 +27,6 @@ public class ReceiverHandler : IDisposable
         _socket = socket;
     }
 
-    // 세션 종료 후 pool 반환 직전 호출. SAEA/parser 버퍼 등 재사용 자원은 보존한다.
     public void Reset()
     {
         if (_socket != null)
@@ -67,7 +61,7 @@ public class ReceiverHandler : IDisposable
             var messages = _parser.Parse(e.BytesTransferred);
             foreach (var msg in messages)
             {
-                await _messageQueueWorker.EnqueueAsync(_receiver, RemoteReceiveMessage.Rent(msg));
+                await _receiver.EnqueueMessageAsync(RemoteReceiveMessage.Rent(msg));
             }
 
             StartReceive();
@@ -94,15 +88,11 @@ public class ReceiverHandler : IDisposable
         }
     }
 
-    // 최종 해제: pool 자체가 파기될 때만 호출.
     public void Dispose()
     {
         Reset();
-
         _receiveEventArgs.Completed -= OnReceiveCompleted;
         _receiveEventArgs.Dispose();
         _parser.Dispose();
     }
 }
-
-

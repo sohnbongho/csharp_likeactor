@@ -1,10 +1,12 @@
-﻿using Library.Logger;
+using Library.ContInfo;
+using Library.Logger;
 using Library.MessageQueue;
 using Library.MessageQueue.Message;
 using Library.Network;
 using Library.Worker.Interface;
 using Messages;
 using System.Net.Sockets;
+using System.Threading.Channels;
 
 namespace DummyClient.Session;
 
@@ -14,31 +16,28 @@ public class UserSession : IDisposable, IMessageQueueReceiver, ISessionUsable, I
     private static readonly IServerLogger _logger = ServerLoggerFactory.CreateLogger();
     private readonly SenderHandler _sender;
     private readonly ReceiverHandler _receiver;
-    private readonly MessageQueueWorker _messageQueueWorker;
+    private readonly Channel<IMessageQueue> _messageChannel;
     private readonly ulong _sessionId;
     private readonly UserObjectPoolManager _userManager;
-    // 0: active, 1: disposed — Interlocked로 원자 전환해 double-dispose race 방지.
     private int _disposedFlag;
 
     public ulong SessionId => _sessionId;
 
-    public static UserSession Of(TcpClient client, ulong
-        sessionId,
-        UserObjectPoolManager userObjectPoolManager,
-        MessageQueueWorkerManager messageQueueWorkerManager)
+    public static UserSession Of(TcpClient client, ulong sessionId, UserObjectPoolManager userObjectPoolManager)
     {
-        return new UserSession(client, sessionId, userObjectPoolManager, messageQueueWorkerManager);
+        return new UserSession(client, sessionId, userObjectPoolManager);
     }
 
-    public UserSession(TcpClient client, ulong sessionId, UserObjectPoolManager userManager,
-        MessageQueueWorkerManager workerManager)
+    public UserSession(TcpClient client, ulong sessionId, UserObjectPoolManager userManager)
     {
         _client = client;
         _sessionId = sessionId;
         _userManager = userManager;
-        _messageQueueWorker = workerManager.GetWorker(sessionId);
 
-        _receiver = new ReceiverHandler(this, _messageQueueWorker);
+        _messageChannel = Channel.CreateUnbounded<IMessageQueue>(
+            new UnboundedChannelOptions { SingleReader = true, AllowSynchronousContinuations = false });
+
+        _receiver = new ReceiverHandler(this);
         _sender = new SenderHandler();
     }
 
@@ -62,24 +61,30 @@ public class UserSession : IDisposable, IMessageQueueReceiver, ISessionUsable, I
         });
     }
 
-    public async Task<bool> OnRecvMessageAsync(IMessageQueue message)
+    public async ValueTask TickAsync()
     {
         if (Volatile.Read(ref _disposedFlag) != 0)
-            return false;
+            return;
 
-        return await MessageQueueDispatcher.Instance.OnRecvMessageAsync(this, _sender, message);
+        int drained = 0;
+        while (drained < SessionConstInfo.MaxMessagesPerTick && _messageChannel.Reader.TryRead(out var message))
+        {
+            await MessageQueueDispatcher.Instance.OnRecvMessageAsync(this, _sender, message);
+            drained++;
+        }
     }
 
     public ValueTask<bool> EnqueueMessageAsync(IMessageQueue message)
     {
-        return _messageQueueWorker.EnqueueAsync(this, message);
+        if (Volatile.Read(ref _disposedFlag) != 0)
+            return new ValueTask<bool>(false);
+        return new ValueTask<bool>(_messageChannel.Writer.TryWrite(message));
     }
 
     public bool Send(MessageWrapper message)
     {
-        if(Volatile.Read(ref _disposedFlag) != 0)
+        if (Volatile.Read(ref _disposedFlag) != 0)
             return false;
-
         return _sender.Send(message);
     }
 
@@ -87,12 +92,8 @@ public class UserSession : IDisposable, IMessageQueueReceiver, ISessionUsable, I
 
     public void Dispose()
     {
-        // 원자 전환: 0→1에 성공한 스레드만 정리 경로 진입.
         if (Interlocked.CompareExchange(ref _disposedFlag, 1, 0) != 0)
             return;
-
         _client?.Dispose();
     }
-
-    public void Tick() { }
 }

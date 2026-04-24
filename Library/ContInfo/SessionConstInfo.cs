@@ -13,6 +13,5 @@ public static class SessionConstInfo
     public const int MaxMessageBodySize = MaxBufferSize - 2; // 2바이트 길이 헤더를 제외한 메시지 최대 크기
     public const int MaxTimerPerSession = 100;              // 세션당 최대 타이머 수
     public const int MaxConnectionsPerIpPerMinute = 20;    // IP당 분당 최대 신규 연결 수
-
-
+    public const int MaxMessagesPerTick = 50;               // tick당 세션 하나에서 처리할 최대 메시지 수
 }

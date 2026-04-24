@@ -1,10 +1,12 @@
-﻿using Library.Logger;
+using Library.ContInfo;
+using Library.Logger;
 using Library.MessageQueue;
 using Library.MessageQueue.Message;
 using Library.Network;
 using Library.Timer;
 using Library.Worker.Interface;
 using System.Net.Sockets;
+using System.Threading.Channels;
 
 namespace Server.Actors.User;
 
@@ -12,83 +14,79 @@ public class UserSession : IDisposable, ITickable, IMessageQueueReceiver, ISessi
 {
     public ulong SessionId => _sessionId;
 
+    // 0 = 로비, 그 외 = 소속 월드 ID
+    public ulong WorldId { get; private set; }
+
     private static readonly IServerLogger _logger = ServerLoggerFactory.CreateLogger();
 
-    // pool 수명동안 재사용되는 컴포넌트 — 매 rental마다 할당하지 않는다.
+    // pool 수명동안 재사용되는 컴포넌트
     private readonly ReceiverHandler _receiver;
     private readonly SenderHandler _sender;
     private readonly TimerScheduleManager _timerScheduleManager;
 
+    // 네트워크 수신 스레드가 쓰고, tick 스레드가 읽는 단방향 채널
+    private readonly Channel<IMessageQueue> _messageChannel;
+
     private UserConnectionComponent? _userConnection;
-
-    private MessageQueueWorker _messageQueueWorker;
-
     private ulong _sessionId;
-    // 0: active, 1: disposed — Interlocked.CompareExchange로 원자 전환.
-    // 두 스레드가 동시에 Dispose를 호출해도 한 쪽만 정리 로직/풀 반환을 수행한다.
     private int _disposedFlag;
-
     private readonly UserObjectPoolManager _userManager;
 
-    public static UserSession Of(
-        ulong sessionId,
-        UserObjectPoolManager userManager,
-        MessageQueueWorkerManager workerManager)
+    public static UserSession Of(ulong sessionId, UserObjectPoolManager userManager)
     {
-        return new UserSession(sessionId, userManager, workerManager);
+        return new UserSession(sessionId, userManager);
     }
 
-    private UserSession(
-        ulong sessionId,
-        UserObjectPoolManager userManager,
-        MessageQueueWorkerManager workerManager)
+    private UserSession(ulong sessionId, UserObjectPoolManager userManager)
     {
         _userManager = userManager;
         _sessionId = sessionId;
-        _messageQueueWorker = workerManager.GetWorker(sessionId);
+
+        _messageChannel = Channel.CreateUnbounded<IMessageQueue>(
+            new UnboundedChannelOptions { SingleReader = true, AllowSynchronousContinuations = false });
 
         _timerScheduleManager = new TimerScheduleManager();
-        _receiver = new ReceiverHandler(this, _messageQueueWorker);
+        _receiver = new ReceiverHandler(this);
         _sender = new SenderHandler();
     }
 
-    public void Reinitialize(ulong sessionId, MessageQueueWorkerManager workerManager)
+    public void Reinitialize(ulong sessionId)
     {
         _sessionId = sessionId;
-        _messageQueueWorker = workerManager.GetWorker(sessionId);
+        WorldId = 0;
 
-        // 재사용 컴포넌트는 Reset만: 8KB 송수신 버퍼/SAEA/PriorityQueue 재할당 회피.
+        // 이전 rental에서 남은 메시지 제거
+        while (_messageChannel.Reader.TryRead(out var msg))
+        {
+            if (msg is RemoteReceiveMessage rem) RemoteReceiveMessage.Return(rem);
+        }
+
         _timerScheduleManager.Reset();
         _receiver.Reset();
         _sender.Reset();
         Volatile.Write(ref _disposedFlag, 0);
     }
 
-
     public void Bind(Socket socket)
     {
         Volatile.Write(ref _disposedFlag, 0);
         _userConnection = new UserConnectionComponent(socket);
-
         _sender.Bind(_userConnection.Socket, Disconnect);
         _receiver.Bind(_userConnection.Socket);
         _receiver.StartReceive();
     }
 
-
     public void Dispose()
     {
-        // 원자 전환: 0→1에 성공한 스레드만 정리 경로 진입.
         if (Interlocked.CompareExchange(ref _disposedFlag, 1, 0) != 0)
             return;
 
         if (_userConnection != null)
         {
-            _userConnection.Dispose(); // 소켓을 먼저 닫아 수신 루프를 즉시 끊는다
+            _userConnection.Dispose();
             _userConnection = null;
         }
 
-        // 최종 Dispose가 아니라 pool 반환을 위한 Reset.
         _timerScheduleManager.Reset();
         _receiver.Reset();
         _sender.Reset();
@@ -96,23 +94,28 @@ public class UserSession : IDisposable, ITickable, IMessageQueueReceiver, ISessi
         _userManager.RemoveUser(this);
     }
 
-    public async Task<bool> OnRecvMessageAsync(IMessageQueue message)
+    // tick 스레드에서 호출 — 채널 drain 후 타이머 실행
+    public async ValueTask TickAsync()
     {
         if (Volatile.Read(ref _disposedFlag) != 0)
-            return false;
+            return;
 
-        return await MessageQueueDispatcher.Instance.OnRecvMessageAsync(this, _sender, message);
-    }
+        int drained = 0;
+        while (drained < SessionConstInfo.MaxMessagesPerTick && _messageChannel.Reader.TryRead(out var message))
+        {
+            await MessageQueueDispatcher.Instance.OnRecvMessageAsync(this, _sender, message);
+            drained++;
+        }
 
-    public void Tick()
-    {
-        //_logger.Debug(() => "Tick()");
         _timerScheduleManager.Tick();
     }
 
+    // 네트워크 수신 스레드에서 호출 — 채널에 쓰기만 함
     public ValueTask<bool> EnqueueMessageAsync(IMessageQueue message)
     {
-        return _messageQueueWorker.EnqueueAsync(this, message);
+        if (Volatile.Read(ref _disposedFlag) != 0)
+            return new ValueTask<bool>(false);
+        return new ValueTask<bool>(_messageChannel.Writer.TryWrite(message));
     }
 
     public bool Send(Messages.MessageWrapper message)
@@ -125,4 +128,9 @@ public class UserSession : IDisposable, ITickable, IMessageQueueReceiver, ISessi
         Dispose();
     }
 
+    // 핸들러에서 월드 이동 시 호출. 반드시 현재 tick 스레드(핸들러 실행 중) 내에서 호출할 것.
+    public void MoveToWorld(ulong worldId) => _userManager.MoveToWorld(this, worldId);
+
+    // UserObjectPoolManager 전용 — WorldId 직접 변경.
+    internal void SetWorldId(ulong worldId) => WorldId = worldId;
 }
