@@ -16,8 +16,10 @@ public class TCPAcceptor : IDisposable
     private volatile bool _stopping;
     private readonly List<SocketAsyncEventArgs> _allArgs = new();
 
-    // IP별 최근 연결 시각 목록 (슬라이딩 윈도우 레이트 리미터)
+    // IP별 최근 연결 시각 목록 (버스트 플러드 감지용)
     private readonly ConcurrentDictionary<string, Queue<DateTime>> _connectionTimestamps = new();
+    private readonly ConcurrentDictionary<string, DateTime> _bannedIps = new();
+    private readonly HashSet<string> _allowlistedIps;
 
     // 만료된 IP 엔트리 정리 주기. IP 로테이션 공격으로 dict가 무한 증식하는 것을 방지.
     private long _lastSweepTicks;
@@ -30,6 +32,7 @@ public class TCPAcceptor : IDisposable
         _maxConnections = maxConnections;
         _maxPoolCount = _maxConnections * 2;
         _acceptArgsPool = new SocketAsyncEventArgsPool(_maxConnections);
+        _allowlistedIps = new HashSet<string> { "127.0.0.1", "::1" };
 
         _listener = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
         _listener.Bind(new IPEndPoint(IPAddress.Any, port));
@@ -107,14 +110,13 @@ public class TCPAcceptor : IDisposable
 
         if (e.SocketError == SocketError.Success && e.AcceptSocket != null)
         {
-            if (IsRateLimited(e.AcceptSocket))
-            {
+            var remoteAddress = (e.AcceptSocket.RemoteEndPoint as IPEndPoint)?.Address;
+            var ip = remoteAddress != null ? NormalizeIp(remoteAddress) : null;
+
+            if (ip == null || ShouldBlock(ip))
                 e.AcceptSocket.Close();
-            }
             else
-            {
                 OnAccepted?.Invoke(e.AcceptSocket);
-            }
         }
         else
         {
@@ -125,38 +127,69 @@ public class TCPAcceptor : IDisposable
         StartAccept();
     }
 
-    private bool IsRateLimited(Socket socket)
+    private static string NormalizeIp(IPAddress address)
     {
-        var remoteIp = (socket.RemoteEndPoint as IPEndPoint)?.Address.ToString();
-        if (remoteIp == null)
+        if (address.IsIPv4MappedToIPv6)
+            return address.MapToIPv4().ToString();
+        return address.ToString();
+    }
+
+    private bool ShouldBlock(string ip)
+    {
+        if (_allowlistedIps.Contains(ip)) return false;
+        if (IsBanned(ip))
+        {
+            _logger.Warn(() => $"밴된 IP 접속 시도: {ip}");
+            return true;
+        }
+        if (IsFloodDetected(ip))
+        {
+            RegisterBan(ip);
+            return true;
+        }
+        return false;
+    }
+
+    private bool IsBanned(string ip)
+    {
+        if (!_bannedIps.TryGetValue(ip, out var expiry))
             return false;
+        if (DateTime.UtcNow < expiry)
+            return true;
+        _bannedIps.TryRemove(ip, out _);
+        return false;
+    }
 
+    private void RegisterBan(string ip)
+    {
+        _bannedIps[ip] = DateTime.UtcNow.AddMinutes(SessionConstInfo.BanDurationMinutes);
+        _logger.Warn(() => $"플러드 감지, {SessionConstInfo.BanDurationMinutes}분 밴: {ip}");
+    }
+
+    private bool IsFloodDetected(string ip)
+    {
         var now = DateTime.UtcNow;
-        var windowStart = now.AddMinutes(-1);
+        var windowStart = now.AddSeconds(-SessionConstInfo.FloodWindowSeconds);
 
-        var timestamps = _connectionTimestamps.GetOrAdd(remoteIp, _ => new Queue<DateTime>());
+        var timestamps = _connectionTimestamps.GetOrAdd(ip, _ => new Queue<DateTime>());
 
-        bool limited;
+        bool flooded;
         lock (timestamps)
         {
-            // 1분 지난 항목 제거
             while (timestamps.Count > 0 && timestamps.Peek() < windowStart)
                 timestamps.Dequeue();
 
-            if (timestamps.Count >= SessionConstInfo.MaxConnectionsPerIpPerMinute)
-            {
-                _logger.Warn(() => $"연결 속도 제한 초과: {remoteIp} ({timestamps.Count}회/분)");
-                limited = true;
-            }
+            if (timestamps.Count >= SessionConstInfo.MaxConnectionsPerWindow)
+                flooded = true;
             else
             {
                 timestamps.Enqueue(now);
-                limited = false;
+                flooded = false;
             }
         }
 
         SweepExpiredIfDue(now, windowStart);
-        return limited;
+        return flooded;
     }
 
     // 주기적으로 만료 엔트리를 dict에서 제거. 단일 스레드만 스위프를 실행하도록 CAS로 방어.
@@ -181,6 +214,13 @@ public class TCPAcceptor : IDisposable
                 if (q.Count == 0)
                     _connectionTimestamps.TryRemove(kv.Key, out _);
             }
+        }
+
+        // 만료된 밴 정리
+        foreach (var kv in _bannedIps)
+        {
+            if (now >= kv.Value)
+                _bannedIps.TryRemove(kv.Key, out _);
         }
     }
 
