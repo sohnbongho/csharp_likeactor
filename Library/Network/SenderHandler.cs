@@ -94,24 +94,10 @@ public class SenderHandler : IDisposable
 
             try
             {
-                // MemoryStream/ToArray/BitConverter.GetBytes 할당을 피하고 _sendBuffer에 직접 기록한다.
-                int bodyLength = message.CalculateSize();
-
-                if (bodyLength > SessionConstInfo.MaxMessageBodySize)
-                {
-                    _logger.Warn(() => $"메시지 크기 초과 ({bodyLength} bytes, 최대 {SessionConstInfo.MaxMessageBodySize}), 해당 메시지 드롭");
-                    // 파이프라인 정지 방지: 크기 초과 메시지는 드롭하고 다음 메시지를 계속 처리한다.
+                if (!TrySerializeToBuffer(message, out int frameSize))
                     continue;
-                }
 
-                // 2바이트 little-endian 길이 헤더
-                _sendBuffer[0] = (byte)(bodyLength & 0xFF);
-                _sendBuffer[1] = (byte)((bodyLength >> 8) & 0xFF);
-
-                // protobuf 직렬화 결과를 바로 _sendBuffer의 [2..]에 기록 (Span 기반 zero-alloc)
-                message.WriteTo(_sendBuffer.AsSpan(2, bodyLength));
-
-                _sendEventArgs.SetBuffer(_sendBuffer, 0, 2 + bodyLength);
+                _sendEventArgs.SetBuffer(_sendBuffer, 0, frameSize);
 
                 if (!socket.SendAsync(_sendEventArgs))
                 {
@@ -127,6 +113,26 @@ public class SenderHandler : IDisposable
                 return false;
             }
         }
+    }
+
+    // 메시지를 _sendBuffer에 직렬화한다. 성공하면 true와 프레임 전체 크기(헤더+바디)를 반환.
+    // 크기 초과 시 경고 후 false를 반환해 해당 메시지를 드롭한다.
+    private bool TrySerializeToBuffer(MessageWrapper message, out int frameSize)
+    {
+        int bodyLength = message.CalculateSize();
+        if (bodyLength > SessionConstInfo.MaxMessageBodySize)
+        {
+            _logger.Warn(() => $"메시지 크기 초과 ({bodyLength} bytes, 최대 {SessionConstInfo.MaxMessageBodySize}), 해당 메시지 드롭");
+            frameSize = 0;
+            return false;
+        }
+
+        _sendBuffer[0] = (byte)(bodyLength & 0xFF);
+        _sendBuffer[1] = (byte)((bodyLength >> 8) & 0xFF);
+        message.WriteTo(_sendBuffer.AsSpan(2, bodyLength));
+
+        frameSize = 2 + bodyLength;
+        return true;
     }
 
     private void OnSendCompleted(object? sender, SocketAsyncEventArgs e)
