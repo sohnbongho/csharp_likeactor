@@ -1,4 +1,4 @@
-﻿using Google.Protobuf;
+using Google.Protobuf;
 using Library.ContInfo;
 using Library.Logger;
 using Messages;
@@ -85,8 +85,10 @@ public class SenderHandler : IDisposable
                 // 아직 1이던 플래그를 보고 빠져나갔을 수 있다. 큐를 재확인해서 있으면 재시도.
                 if (_pendingSendQueue.IsEmpty)
                     return true;
+
                 if (Interlocked.CompareExchange(ref _isSending, 1, 0) != 0)
                     return true; // 다른 스레드가 이미 sending을 잡음
+
                 continue;
             }
 
@@ -146,4 +148,3 @@ public class SenderHandler : IDisposable
         ProcessSendQueue();
     }
 }
-

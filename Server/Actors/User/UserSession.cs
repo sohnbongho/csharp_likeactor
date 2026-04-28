@@ -120,7 +120,10 @@ public class UserSession : IDisposable, ITickable, IMessageQueueReceiver, ISessi
 
     public bool Send(Messages.MessageWrapper message)
     {
-        return Volatile.Read(ref _disposedFlag) != 0 ? false : _sender.Send(message);
+        if (Volatile.Read(ref _disposedFlag) != 0)
+            return false;
+
+        return _sender.Send(message);
     }
 
     public void Disconnect()
