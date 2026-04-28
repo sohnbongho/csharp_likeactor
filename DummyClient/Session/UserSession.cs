@@ -34,8 +34,13 @@ public class UserSession : IDisposable, IMessageQueueReceiver, ISessionUsable, I
         _sessionId = sessionId;
         _userManager = userManager;
 
-        _messageChannel = Channel.CreateUnbounded<IMessageQueue>(
-            new UnboundedChannelOptions { SingleReader = true, AllowSynchronousContinuations = false });
+        _messageChannel = Channel.CreateBounded<IMessageQueue>(
+            new BoundedChannelOptions(SessionConstInfo.MaxMessageChannelCapacity)
+            {
+                SingleReader = true,
+                AllowSynchronousContinuations = false,
+                FullMode = BoundedChannelFullMode.DropWrite
+            });
 
         _receiver = new ReceiverHandler(this);
         _sender = new SenderHandler();

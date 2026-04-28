@@ -1,4 +1,5 @@
-﻿using Library.Model;
+﻿using Library.ContInfo;
+using Library.Model;
 using Messages;
 using System.Collections.Concurrent;
 
@@ -13,7 +14,7 @@ public interface IMessageQueue
 public class RemoteReceiveMessage : IMessageQueue
 {
     private static readonly ConcurrentQueue<RemoteReceiveMessage> _pool = new();
-    private const int MaxPoolSize = 4096;
+    private static readonly int MaxPoolSize = SessionConstInfo.MaxUserSessionPoolSize;
     private static int _poolCount;
 
     public MessageWrapper MessageWrapper { get; set; } = null!;
@@ -31,12 +32,15 @@ public class RemoteReceiveMessage : IMessageQueue
 
     public static void Return(RemoteReceiveMessage msg)
     {
-        if (Volatile.Read(ref _poolCount) >= MaxPoolSize)
+        // Increment-first: 초과 시 롤백해 정확한 상한 보장
+        if (Interlocked.Increment(ref _poolCount) > MaxPoolSize)
+        {
+            Interlocked.Decrement(ref _poolCount);
             return;
+        }
 
         msg.MessageWrapper = null!;
         _pool.Enqueue(msg);
-        Interlocked.Increment(ref _poolCount);
     }
 }
 

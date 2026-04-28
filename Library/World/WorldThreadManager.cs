@@ -16,7 +16,7 @@ public class WorldThreadManager
         _workerCount = (ulong)ThreadConstInfo.MaxWorldThreadCount;
         _workers = new TickThreadWorker[_workerCount];
         for (int i = 0; i < (int)_workerCount; i++)
-            _workers[i] = new TickThreadWorker(i + 1); // id 0은 LobbyThread 사용
+            _workers[i] = new TickThreadWorker(1001 + i); // 월드 워커: id 1001..
     }
 
     public void Start()

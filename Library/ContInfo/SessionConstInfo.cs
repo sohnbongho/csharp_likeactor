@@ -14,4 +14,5 @@ public static class SessionConstInfo
     public const int MaxTimerPerSession = 100;              // 세션당 최대 타이머 수
     public const int MaxConnectionsPerIpPerMinute = 20;    // IP당 분당 최대 신규 연결 수
     public const int MaxMessagesPerTick = 50;               // tick당 세션 하나에서 처리할 최대 메시지 수
+    public const int MaxMessageChannelCapacity = 1000;      // 세션당 수신 채널 용량 (초과 시 세션 강제 종료)
 }

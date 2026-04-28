@@ -61,7 +61,13 @@ public class ReceiverHandler : IDisposable
             var messages = _parser.Parse(e.BytesTransferred);
             foreach (var msg in messages)
             {
-                await _receiver.EnqueueMessageAsync(RemoteReceiveMessage.Rent(msg));
+                var envelope = RemoteReceiveMessage.Rent(msg);
+                if (!await _receiver.EnqueueMessageAsync(envelope))
+                {
+                    RemoteReceiveMessage.Return(envelope);
+                    Disconnected();
+                    return;
+                }
             }
 
             StartReceive();

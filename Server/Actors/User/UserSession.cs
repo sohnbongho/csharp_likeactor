@@ -42,8 +42,13 @@ public class UserSession : IDisposable, ITickable, IMessageQueueReceiver, ISessi
         _userManager = userManager;
         _sessionId = sessionId;
 
-        _messageChannel = Channel.CreateUnbounded<IMessageQueue>(
-            new UnboundedChannelOptions { SingleReader = true, AllowSynchronousContinuations = false });
+        _messageChannel = Channel.CreateBounded<IMessageQueue>(
+            new BoundedChannelOptions(SessionConstInfo.MaxMessageChannelCapacity)
+            {
+                SingleReader = true,
+                AllowSynchronousContinuations = false,
+                FullMode = BoundedChannelFullMode.DropWrite
+            });
 
         _timerScheduleManager = new TimerScheduleManager();
         _receiver = new ReceiverHandler(this);
