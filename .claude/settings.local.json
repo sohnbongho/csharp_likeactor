@@ -5,7 +5,8 @@
       "Bash(dotnet build *)",
       "Bash(protoc *)",
       "Bash(cmd.exe /c build.bat)",
-      "Bash(cmd.exe *)"
+      "Bash(cmd.exe *)",
+      "Skill(update-config)"
     ]
   }
 }
