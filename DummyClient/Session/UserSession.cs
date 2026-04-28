@@ -58,8 +58,6 @@ public class UserSession : IDisposable, IMessageQueueReceiver, ISessionUsable, I
 
     public void Run()
     {
-        _logger.Debug(() => $"[SessionId:{SessionId}] Run...");
-
         _sender.Send(new MessageWrapper
         {
             KeepAliveRequest = new KeepAliveRequest()

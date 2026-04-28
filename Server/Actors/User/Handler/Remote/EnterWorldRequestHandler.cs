@@ -9,8 +9,6 @@ namespace Server.Actors.User.Handler.Remote;
 [RemoteMessageHandlerAsyncAttribute(MessageWrapper.PayloadOneofCase.EnterWorldRequest)]
 public class EnterWorldRequestHandler : IRemoteMessageHandlerAsync
 {
-    private static readonly IServerLogger _logger = ServerLoggerFactory.CreateLogger();
-
     public Task<bool> HandleAsync(IMessageQueueReceiver receiver, MessageWrapper message)
     {
         var worldId = message.EnterWorldRequest.WorldId;
@@ -18,8 +16,6 @@ public class EnterWorldRequestHandler : IRemoteMessageHandlerAsync
         if (receiver is UserSession session)
         {
             session.MoveToWorld(worldId);
-
-            _logger.Debug(() => $"[SessionId:{session.SessionId}] 월드 입장 WorldId:{worldId}");
 
             receiver.Send(new MessageWrapper
             {

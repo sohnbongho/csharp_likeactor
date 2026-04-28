@@ -19,6 +19,8 @@ public class UserObjectPoolManager
     private volatile bool _stopping;
     private readonly object _shutdownLock = new();
 
+    public int ActiveSessionCount => _activeSessions.Count;
+
     public UserObjectPoolManager(LobbyThreadManager lobbyThreadManager, WorldThreadManager worldThreadManager)
     {
         _userSessionPool = new ObjectPool<UserSession>(SessionConstInfo.MaxUserSessionPoolSize);

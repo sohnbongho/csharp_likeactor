@@ -26,28 +26,19 @@ public class ObjectPool<T> : IObjectPool<T> where T : class
     public T Rent()
     {
         if (_pool.TryDequeue(out var obj))
-        {
-            _logger.Debug(() => $"[ObjectPool<{typeof(T).Name}>] Rent Count: {_pool.Count}");
             return obj;
-        }
 
         throw new InvalidOperationException($"[ObjectPool<{typeof(T).Name}>] Pool exhausted");
     }
 
     public bool TryRent(out T? obj)
     {
-        if (_pool.TryDequeue(out obj))
-        {
-            _logger.Debug(() => $"[ObjectPool<{typeof(T).Name}>] Rent Count: {_pool.Count}");
-            return true;
-        }
-        return false;
+        return _pool.TryDequeue(out obj);
     }
 
     public void Return(T obj)
     {
         _pool.Enqueue(obj);
-        _logger.Debug(() => $"[ObjectPool<{typeof(T).Name}>] Return Count:{_pool.Count}");
     }
 
     public int Count => _pool.Count;

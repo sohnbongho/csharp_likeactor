@@ -53,7 +53,6 @@ public class ReceiverHandler : IDisposable
         {
             if (e.BytesTransferred <= 0 || e.SocketError != SocketError.Success)
             {
-                _logger.Info(() => $"Disconnect");
                 Disconnected();
                 return;
             }

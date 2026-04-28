@@ -14,7 +14,7 @@ public class TcpDummyClient
     private readonly UserObjectPoolManager _userObjectPoolManager;
     private readonly LobbyThreadManager _lobbyThreadManager;
     private readonly ManualResetEvent _shutdownEvent = new(false);
-    private readonly int _maxClientCount = 1;
+    private readonly int _maxClientCount = 10000;
     private readonly ConcurrentQueue<UserSession> _connectedUsers = new();
 
     public TcpDummyClient()
@@ -31,18 +31,24 @@ public class TcpDummyClient
 
     public async Task StartAsync()
     {
-        _logger.Debug(() => "[DummyClient] 서버에 연결 시도 중...");
+        _logger.Info(() => $"[DummyClient] 접속 시작 (목표: {_maxClientCount}명)");
 
         try
         {
+            const int batchSize = 1000;
             for (int i = 0; i < _maxClientCount; ++i)
             {
                 var userSession = _userObjectPoolManager.RentUser();
                 await userSession.ConnectAsync(ServerIp, ServerPort);
                 _connectedUsers.Enqueue(userSession);
-
                 userSession.Run();
-                await Task.Delay(1000);
+
+                if ((i + 1) % batchSize == 0 || i + 1 == _maxClientCount)
+                {
+                    _logger.Info(() => $"[동접] {_connectedUsers.Count}/{_maxClientCount}");
+                    if (i + 1 < _maxClientCount)
+                        await Task.Delay(1000);
+                }
             }
 
             _shutdownEvent.WaitOne();
@@ -61,10 +67,8 @@ public class TcpDummyClient
             if (false == _connectedUsers.TryDequeue(out var userSession))
                 break;
 
-            _logger.Debug(() => $"[DummyClient] {i}");
 
             userSession.Disconnect();
-            Task.Delay(1000).Wait();
         }
 
         _lobbyThreadManager.StopAsync().GetAwaiter().GetResult();
