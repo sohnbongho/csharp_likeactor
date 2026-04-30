@@ -60,6 +60,7 @@ public class ReceiverHandler : IDisposable
             var messages = _parser.Parse(e.BytesTransferred);
             foreach (var msg in messages)
             {
+                PacketStats.IncrementReceived();
                 var envelope = RemoteReceiveMessage.Rent(msg);
                 if (!await _receiver.EnqueueMessageAsync(envelope))
                 {

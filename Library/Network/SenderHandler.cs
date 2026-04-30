@@ -97,6 +97,7 @@ public class SenderHandler : IDisposable
                 if (!TrySerializeToBuffer(message, out int frameSize))
                     continue;
 
+                PacketStats.IncrementSent();
                 _sendEventArgs.SetBuffer(_sendBuffer, 0, frameSize);
 
                 if (!socket.SendAsync(_sendEventArgs))

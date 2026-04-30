@@ -69,6 +69,7 @@ public class TcpServer
         var process = Process.GetCurrentProcess();
         var prevCpuTime = process.TotalProcessorTime;
         var prevTick = Stopwatch.GetTimestamp();
+        var (prevRecv, prevSent) = Library.Network.PacketStats.Snapshot();
 
         while (!token.IsCancellationRequested)
         {
@@ -78,18 +79,23 @@ public class TcpServer
             process.Refresh();
             var currCpuTime = process.TotalProcessorTime;
             var currTick = Stopwatch.GetTimestamp();
+            var (currRecv, currSent) = Library.Network.PacketStats.Snapshot();
 
             var elapsedSec = (currTick - prevTick) / (double)Stopwatch.Frequency;
             var cpuPercent = (currCpuTime - prevCpuTime).TotalSeconds
                              / (elapsedSec * Environment.ProcessorCount) * 100.0;
             var memoryMb = process.WorkingSet64 / 1024.0 / 1024.0;
             var sessions = _userObjectPoolManager.ActiveSessionCount;
+            var recvDelta = currRecv - prevRecv;
+            var sentDelta = currSent - prevSent;
 
             _logger.Info(() =>
-                $"[모니터] 동접: {sessions}명 | CPU: {cpuPercent:F1}% | 메모리: {memoryMb:F0}MB");
+                $"[모니터] 동접: {sessions}명 | CPU: {cpuPercent:F1}% | 메모리: {memoryMb:F0}MB | 수신: {recvDelta}패킷/10s | 송신: {sentDelta}패킷/10s");
 
             prevCpuTime = currCpuTime;
             prevTick = currTick;
+            prevRecv = currRecv;
+            prevSent = currSent;
         }
     }
 }
