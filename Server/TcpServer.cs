@@ -1,4 +1,8 @@
 using Library.ContInfo;
+using Library.Db;
+using Library.Db.Broadcast;
+using Library.Db.Cache;
+using Library.Db.Sql;
 using Library.Logger;
 using Library.World;
 using Server.Acceptor;
@@ -15,21 +19,38 @@ public class TcpServer
     private readonly LobbyThreadManager _lobbyThreadManager;
     private readonly WorldThreadManager _worldThreadManager;
     private readonly TCPAcceptor _acceptor;
+    private readonly SqlWorkerManager _sqlWorkerManager;
+    private readonly CacheWorkerManager _cacheWorkerManager;
+    private readonly RedisBroadcastManager _broadcastManager;
     private readonly ManualResetEvent _shutdownEvent = new(false);
     private readonly CancellationTokenSource _monitorCts = new();
     private Task? _monitorTask;
 
-    public TcpServer(int port)
+    public TcpServer(int port, DbConfig dbConfig)
     {
         _port = port;
         _lobbyThreadManager = new LobbyThreadManager();
         _worldThreadManager = new WorldThreadManager();
         _userObjectPoolManager = new UserObjectPoolManager(_lobbyThreadManager, _worldThreadManager);
         _acceptor = new TCPAcceptor(port);
+        _sqlWorkerManager = new SqlWorkerManager(dbConfig);
+        _cacheWorkerManager = new CacheWorkerManager(dbConfig);
+        _broadcastManager = new RedisBroadcastManager(
+            _cacheWorkerManager.GetSubscriber(), dbConfig.RedisBroadcastChannel);
     }
 
     public void Init()
     {
+        _sqlWorkerManager.Start();
+        _cacheWorkerManager.Start();
+        _broadcastManager.Subscribe(msg =>
+        {
+            // TODO: ServerNotice proto 추가 후 아래 코드 활성화
+            // _userObjectPoolManager.BroadcastAll(new Messages.MessageWrapper
+            //     { ServerNotice = new Messages.ServerNotice { Message = msg } });
+            _logger.Info(() => $"[공지 수신] {msg}");
+        });
+
         _lobbyThreadManager.Start();
         _worldThreadManager.Start();
         _userObjectPoolManager.Init();
@@ -43,6 +64,10 @@ public class TcpServer
 
     public void Start()
     {
+        var mysqlOk = _sqlWorkerManager.CheckConnectionAsync().GetAwaiter().GetResult();
+        var redisOk  = _cacheWorkerManager.CheckConnectionAsync().GetAwaiter().GetResult();
+        _logger.Info(() => $"[DB Connect] MySQL: {(mysqlOk ? "Conneted" : "DisConnected")} | Redis: {(redisOk ? "Conneted" : "DisConnected")}");
+
         _logger.Info(() => $"Server Start Listen Port:{_port}...");
         _acceptor.Start();
         _shutdownEvent.WaitOne();
@@ -57,6 +82,10 @@ public class TcpServer
 
         _lobbyThreadManager.StopAsync().GetAwaiter().GetResult();
         _worldThreadManager.StopAllAsync().GetAwaiter().GetResult();
+
+        _broadcastManager.Unsubscribe();
+        _sqlWorkerManager.StopAsync().GetAwaiter().GetResult();
+        _cacheWorkerManager.StopAsync().GetAwaiter().GetResult();
 
         _monitorCts.Cancel();
         _monitorTask?.GetAwaiter().GetResult();

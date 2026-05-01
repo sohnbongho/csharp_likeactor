@@ -84,6 +84,12 @@ public class UserObjectPoolManager
             _worldThreadManager.Add(session, worldId);
     }
 
+    public void BroadcastAll(Messages.MessageWrapper message)
+    {
+        foreach (var kv in _activeSessions)
+            kv.Value.Send(message);
+    }
+
     public void ShutdownAll()
     {
         lock (_shutdownLock)

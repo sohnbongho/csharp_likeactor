@@ -6,7 +6,15 @@
       "Bash(protoc *)",
       "Bash(cmd.exe /c build.bat)",
       "Bash(cmd.exe *)",
-      "Skill(update-config)"
+      "Skill(update-config)",
+      "Bash(Get-Service -Name \"*mysql*\" -ErrorAction SilentlyContinue)",
+      "Bash(Select-Object Name, Status, DisplayName)",
+      "PowerShell(Get-Process *)",
+      "PowerShell(netstat *)",
+      "PowerShell(\\(New-Object System.Net.Sockets.TcpClient\\).Connect\\(\"127.0.0.1\", 3306\\))",
+      "Bash(wsl --list --verbose)",
+      "Bash(wsl -l -v)",
+      "Bash(wsl *)"
     ]
   }
 }

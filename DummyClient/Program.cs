@@ -4,7 +4,7 @@ public class Program
 {
     static async Task Main(string[] args)
     {
-        await Task.Delay(1000);
+        await Task.Delay(2000);
         
         var tcpDummyClient = new TcpDummyClient();
         tcpDummyClient.Init();
