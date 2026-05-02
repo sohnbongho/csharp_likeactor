@@ -2,54 +2,30 @@ syntax = "proto3";
 
 package Messages;
 
-/*****************************************************************
-//
-
-��ü �޽��� : Ŭ���̾�Ʈ�� ������ ��� �޽����� �̰��� �߰��Ͽ��� �Ѵ�.
-���� ������ ���۴� ��� ������ ���⿡ ��Ŷ�� �޴� �κп��� �и��� �ؾ� �ϱ� �����̴�.
-
-ProtoBuf�� �⺻ ���� Ÿ���� ������ �����ϴ�:
-int32
-int64
-uint32
-uint64 (Web������ double�� �ִ�ġ�̹Ƿ�(15~17)������ �����Ѵ�.���� 19�ڸ��� �ִ� long�� ������ ���ϱ⿡ string���� ��ȯ�ؼ� ������ �Ѵ�.)
-sint32 (ZigZag encoding�� ����Ͽ� ������ ȿ�������� ���ڵ�)
-sint64 (ZigZag encoding�� ����Ͽ� ������ ȿ�������� ���ڵ�)
-fixed32 (Always 4 bytes, more efficient than int32 if values are often greater than 2^28.)
-fixed64 (Always 8 bytes)
-sfixed32 (Always 4 bytes)
-sfixed64 (Always 8 bytes)
-
-// DateTime to Timestamp
-DateTime currentDateTime = DateTime.UtcNow;
-Timestamp timestamp = Timestamp.FromDateTime(currentDateTime);
-
-// Timestamp to DateTime
-DateTime convertedDateTime = timestamp.ToDateTime();
-*****************************************************************/
-message MessageWrapper {  
+message MessageWrapper {
 	int32 message_size = 1;
 	oneof payload {
-		// �ʵ� ��ȣ�� �ִ밪�� 2^29-1(=536870911)���� ����
-		// payload�� ���� ���ٰ� �޸� �������� �ʰ� ���� ���õ� ��ü�� ���� ũ�Ⱑ �ٸ�
 		ConnectedResponse connected_response = 10;
 		KeepAliveNoti keep_alive_noti = 11;
 		KeepAliveRequest keep_alive_request = 12;
 		EnterWorldRequest enter_world_request = 13;
 		EnterWorldResponse enter_world_response = 14;
+		LoginRequest login_request = 20;
+		LoginResponse login_response = 21;
+		ErrorResponse error_response = 22;
 	}
 }
 
-// ���� ����
-message ConnectedResponse {  
-  int32 index = 1;  
+// 연결 완료
+message ConnectedResponse {
+  int32 index = 1;
 }
 
-// ���� ����
-message KeepAliveNoti {    
+// 서버 알림
+message KeepAliveNoti {
 }
 
-// Ŭ���̾�Ʈ�� ���� ����
+// 클라이언트의 연결 유지
 message KeepAliveRequest {
 }
 
@@ -63,3 +39,20 @@ message EnterWorldResponse {
     bool success = 1;
 }
 
+// 로그인 요청 (클라이언트 → 서버)
+message LoginRequest {
+    string user_id = 1;
+    bytes password_hash = 2;  // SHA256(plaintext_password) 32바이트
+}
+
+// 로그인 응답 (서버 → 클라이언트)
+// error_code: 0=성공, 1=인증실패, 2=밴, 3=서버오류, 4=횟수제한
+message LoginResponse {
+    bool success = 1;
+    int32 error_code = 2;
+}
+
+// 서버 오류 응답
+message ErrorResponse {
+    int32 error_code = 1;
+}

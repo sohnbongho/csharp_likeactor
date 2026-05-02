@@ -1,28 +1,26 @@
+using Dapper;
 using Library.Db.Sql;
 using Library.MessageQueue;
 using MySqlConnector;
 
 namespace Server.Actors.User.DbRequest.Sql;
 
-// IsCritical=true — 로그아웃 시 유저 정보 저장, 실패 시 성공까지 재시도
 public class LogoutSqlRequest : ISqlRequest
 {
-    public IMessageQueueReceiver? Session => null; // 세션 응답 불필요
+    public IMessageQueueReceiver? Session => null;
     public bool IsCritical => true;
 
-    private readonly ulong _sessionId;
+    private readonly ulong _accountId;
 
-    public LogoutSqlRequest(ulong sessionId)
+    public LogoutSqlRequest(ulong accountId)
     {
-        _sessionId = sessionId;
+        _accountId = accountId;
     }
 
     public async Task ExecuteAsync(MySqlConnection connection)
     {
-        // TODO: 실제 유저 정보 저장 쿼리 구현
-        // await connection.ExecuteAsync(
-        //     "UPDATE users SET last_logout = NOW() WHERE session_id = @SessionId",
-        //     new { SessionId = _sessionId });
-        await Task.CompletedTask;
+        await connection.ExecuteAsync(
+            "UPDATE accounts SET last_login_at = UTC_TIMESTAMP() WHERE account_id = @AccountId",
+            new { AccountId = _accountId });
     }
 }

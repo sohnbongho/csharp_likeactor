@@ -39,9 +39,9 @@ public class TcpDummyClient
             for (int i = 0; i < _maxClientCount; ++i)
             {
                 var userSession = _userObjectPoolManager.RentUser();
+                userSession.Run(i + 1);
                 await userSession.ConnectAsync(ServerIp, ServerPort);
                 _connectedUsers.Enqueue(userSession);
-                userSession.Run();
 
                 if ((i + 1) % batchSize == 0 || i + 1 == _maxClientCount)
                 {

@@ -31,9 +31,9 @@ public class TcpServer
         _port = port;
         _lobbyThreadManager = new LobbyThreadManager();
         _worldThreadManager = new WorldThreadManager();
-        _userObjectPoolManager = new UserObjectPoolManager(_lobbyThreadManager, _worldThreadManager);
-        _acceptor = new TCPAcceptor(port);
         _sqlWorkerManager = new SqlWorkerManager(dbConfig);
+        _userObjectPoolManager = new UserObjectPoolManager(_lobbyThreadManager, _worldThreadManager, _sqlWorkerManager);
+        _acceptor = new TCPAcceptor(port);
         _cacheWorkerManager = new CacheWorkerManager(dbConfig);
         _broadcastManager = new RedisBroadcastManager(
             _cacheWorkerManager.GetSubscriber(), dbConfig.RedisBroadcastChannel);

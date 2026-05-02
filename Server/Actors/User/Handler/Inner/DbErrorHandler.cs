@@ -10,8 +10,7 @@ public class DbErrorHandler : IInnerMessageHandlerAsync
 {
     public Task<bool> HandleAsync(IMessageQueueReceiver receiver, IInnerServerMessage message)
     {
-        // TODO: ErrorResponse proto 메시지 추가 후 Send() 구현
-        // receiver.Send(new Messages.MessageWrapper { ErrorResponse = ... });
+        receiver.Send(new Messages.MessageWrapper { ErrorResponse = new Messages.ErrorResponse { ErrorCode = 3 } });
         return Task.FromResult(true);
     }
 }

@@ -1,10 +1,14 @@
 using Library.ContInfo;
+using Library.Db.Sql;
 using Library.Logger;
 using Library.MessageQueue;
 using Library.MessageQueue.Message;
 using Library.Network;
 using Library.Timer;
 using Library.Worker.Interface;
+using Messages;
+using Server.Actors.User.DbRequest.Sql;
+using Server.Actors.User.Model;
 using System.Net.Sockets;
 using System.Threading.Channels;
 
@@ -13,33 +17,37 @@ namespace Server.Actors.User;
 public class UserSession : IDisposable, ITickable, IMessageQueueReceiver, ISessionUsable
 {
     public ulong SessionId => _sessionId;
-
-    // 0 = 로비, 그 외 = 소속 월드 ID
     public ulong WorldId { get; private set; }
+
+    public UserAccountData? AccountData { get; private set; }
+    public bool IsAuthenticated => AccountData != null;
 
     private static readonly IServerLogger _logger = ServerLoggerFactory.CreateLogger();
 
-    // pool 수명동안 재사용되는 컴포넌트
     private readonly ReceiverHandler _receiver;
     private readonly SenderHandler _sender;
     private readonly TimerScheduleManager _timerScheduleManager;
-
-    // 네트워크 수신 스레드가 쓰고, tick 스레드가 읽는 단방향 채널
     private readonly Channel<IMessageQueue> _messageChannel;
+    private readonly UserObjectPoolManager _userManager;
+    private readonly SqlWorkerManager _sqlWorkerManager;
 
     private UserConnectionComponent? _userConnection;
     private ulong _sessionId;
     private int _disposedFlag;
-    private readonly UserObjectPoolManager _userManager;
 
-    public static UserSession Of(ulong sessionId, UserObjectPoolManager userManager)
+    private int _loginAttemptCount;
+    private long _loginWindowStart;
+    private const int LoginAttemptsPerMinute = 5;
+
+    public static UserSession Of(ulong sessionId, UserObjectPoolManager userManager, SqlWorkerManager sqlWorkerManager)
     {
-        return new UserSession(sessionId, userManager);
+        return new UserSession(sessionId, userManager, sqlWorkerManager);
     }
 
-    private UserSession(ulong sessionId, UserObjectPoolManager userManager)
+    private UserSession(ulong sessionId, UserObjectPoolManager userManager, SqlWorkerManager sqlWorkerManager)
     {
         _userManager = userManager;
+        _sqlWorkerManager = sqlWorkerManager;
         _sessionId = sessionId;
 
         _messageChannel = Channel.CreateBounded<IMessageQueue>(
@@ -59,8 +67,10 @@ public class UserSession : IDisposable, ITickable, IMessageQueueReceiver, ISessi
     {
         _sessionId = sessionId;
         WorldId = 0;
+        AccountData = null;
+        _loginAttemptCount = 0;
+        _loginWindowStart = 0;
 
-        // 이전 rental에서 남은 메시지 제거
         while (_messageChannel.Reader.TryRead(out var msg))
         {
             if (msg is RemoteReceiveMessage rem) RemoteReceiveMessage.Return(rem);
@@ -86,6 +96,12 @@ public class UserSession : IDisposable, ITickable, IMessageQueueReceiver, ISessi
         if (Interlocked.CompareExchange(ref _disposedFlag, 1, 0) != 0)
             return;
 
+        if (AccountData != null)
+        {
+            _sqlWorkerManager.Enqueue(new LogoutSqlRequest(AccountData.AccountId));
+            _userManager.UnregisterAuthenticatedSession(AccountData.UserId, this);
+        }
+
         if (_userConnection != null)
         {
             _userConnection.Dispose();
@@ -99,7 +115,6 @@ public class UserSession : IDisposable, ITickable, IMessageQueueReceiver, ISessi
         _userManager.RemoveUser(this);
     }
 
-    // tick 스레드에서 호출 — 채널 drain 후 타이머 실행
     public async ValueTask TickAsync()
     {
         if (Volatile.Read(ref _disposedFlag) != 0)
@@ -108,6 +123,18 @@ public class UserSession : IDisposable, ITickable, IMessageQueueReceiver, ISessi
         int drained = 0;
         while (drained < SessionConstInfo.MaxMessagesPerTick && _messageChannel.Reader.TryRead(out var message))
         {
+            if (message is RemoteReceiveMessage remote && !IsAuthenticated)
+            {
+                var payloadCase = remote.MessageWrapper.PayloadCase;
+                if (payloadCase != MessageWrapper.PayloadOneofCase.LoginRequest &&
+                    payloadCase != MessageWrapper.PayloadOneofCase.KeepAliveRequest)
+                {
+                    RemoteReceiveMessage.Return(remote);
+                    Disconnect();
+                    return;
+                }
+            }
+
             await MessageQueueDispatcher.Instance.OnRecvMessageAsync(this, _sender, message);
             drained++;
         }
@@ -115,7 +142,6 @@ public class UserSession : IDisposable, ITickable, IMessageQueueReceiver, ISessi
         _timerScheduleManager.Tick();
     }
 
-    // 네트워크 수신 스레드에서 호출 — 채널에 쓰기만 함
     public ValueTask<bool> EnqueueMessageAsync(IMessageQueue message)
     {
         if (Volatile.Read(ref _disposedFlag) != 0)
@@ -123,22 +149,35 @@ public class UserSession : IDisposable, ITickable, IMessageQueueReceiver, ISessi
         return new ValueTask<bool>(_messageChannel.Writer.TryWrite(message));
     }
 
-    public bool Send(Messages.MessageWrapper message)
+    public bool Send(MessageWrapper message)
     {
         if (Volatile.Read(ref _disposedFlag) != 0)
             return false;
-
         return _sender.Send(message);
     }
 
-    public void Disconnect()
-    {
-        Dispose();
-    }
+    public void Disconnect() => Dispose();
 
-    // 핸들러에서 월드 이동 시 호출. 반드시 현재 tick 스레드(핸들러 실행 중) 내에서 호출할 것.
     public void MoveToWorld(ulong worldId) => _userManager.MoveToWorld(this, worldId);
 
-    // UserObjectPoolManager 전용 — WorldId 직접 변경.
     internal void SetWorldId(ulong worldId) => WorldId = worldId;
+
+    internal void OnAuthenticated(UserAccountData data)
+    {
+        AccountData = data;
+        _userManager.RegisterAuthenticatedSession(data.UserId, this);
+    }
+
+    internal bool EnqueueSqlRequest(ISqlRequest request) => _sqlWorkerManager.Enqueue(request);
+
+    public bool TryConsumeLoginAttempt()
+    {
+        var now = Environment.TickCount64;
+        if (now - _loginWindowStart >= 60_000)
+        {
+            _loginWindowStart = now;
+            _loginAttemptCount = 0;
+        }
+        return ++_loginAttemptCount <= LoginAttemptsPerMinute;
+    }
 }

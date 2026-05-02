@@ -3,6 +3,7 @@ using Library.Logger;
 using Library.MessageQueue;
 using Library.MessageQueue.Message;
 using Library.Network;
+using Library.Security;
 using Library.Worker.Interface;
 using Messages;
 using System.Net.Sockets;
@@ -22,6 +23,8 @@ public class UserSession : IDisposable, IMessageQueueReceiver, ISessionUsable, I
     private int _disposedFlag;
 
     public ulong SessionId => _sessionId;
+    public string UserId { get; private set; } = string.Empty;
+    public byte[] ClientHashBytes { get; private set; } = Array.Empty<byte>();
 
     public static UserSession Of(TcpClient client, ulong sessionId, UserObjectPoolManager userObjectPoolManager)
     {
@@ -56,12 +59,10 @@ public class UserSession : IDisposable, IMessageQueueReceiver, ISessionUsable, I
         _receiver.StartReceive();
     }
 
-    public void Run()
+    public void Run(int accountIndex)
     {
-        _sender.Send(new MessageWrapper
-        {
-            KeepAliveRequest = new KeepAliveRequest()
-        });
+        UserId = $"user_{accountIndex:D5}";
+        ClientHashBytes = PasswordHashHelper.ComputeClientHash("Test1234!");
     }
 
     public async ValueTask TickAsync()

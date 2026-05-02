@@ -1,4 +1,5 @@
 using Library.ContInfo;
+using Library.Db.Sql;
 using Library.Logger;
 using Library.Network;
 using Library.ObjectPool;
@@ -15,22 +16,25 @@ public class UserObjectPoolManager
     private readonly IObjectPool<UserSession> _userSessionPool;
     private readonly LobbyThreadManager _lobbyThreadManager;
     private readonly WorldThreadManager _worldThreadManager;
+    private readonly SqlWorkerManager _sqlWorkerManager;
     private readonly ConcurrentDictionary<ulong, UserSession> _activeSessions = new();
+    private readonly ConcurrentDictionary<string, UserSession> _authenticatedSessions = new();
     private volatile bool _stopping;
     private readonly object _shutdownLock = new();
 
     public int ActiveSessionCount => _activeSessions.Count;
 
-    public UserObjectPoolManager(LobbyThreadManager lobbyThreadManager, WorldThreadManager worldThreadManager)
+    public UserObjectPoolManager(LobbyThreadManager lobbyThreadManager, WorldThreadManager worldThreadManager, SqlWorkerManager sqlWorkerManager)
     {
         _userSessionPool = new ObjectPool<UserSession>(SessionConstInfo.MaxUserSessionPoolSize);
         _lobbyThreadManager = lobbyThreadManager;
         _worldThreadManager = worldThreadManager;
+        _sqlWorkerManager = sqlWorkerManager;
     }
 
     public void Init()
     {
-        _userSessionPool.Init(() => UserSession.Of(0, this));
+        _userSessionPool.Init(() => UserSession.Of(0, this, _sqlWorkerManager));
     }
 
     public void AcceptUser(Socket socket)
@@ -53,7 +57,8 @@ public class UserObjectPoolManager
             session.Reinitialize(SessionIdGenerator.Generate());
             _activeSessions.TryAdd(session.SessionId, session);
             session.Bind(socket);
-            _lobbyThreadManager.Add(session); // 접속 직후는 항상 로비 스레드
+            session.Send(new Messages.MessageWrapper { ConnectedResponse = new Messages.ConnectedResponse { Index = 0 } });
+            _lobbyThreadManager.Add(session);
         }
     }
 
@@ -66,6 +71,20 @@ public class UserObjectPoolManager
 
         _activeSessions.TryRemove(session.SessionId, out _);
         _userSessionPool.Return(session);
+    }
+
+    public void RegisterAuthenticatedSession(string userId, UserSession newSession)
+    {
+        _authenticatedSessions.TryGetValue(userId, out var old);
+        _authenticatedSessions[userId] = newSession;
+        if (old != null && !ReferenceEquals(old, newSession))
+            old.Disconnect();
+    }
+
+    public void UnregisterAuthenticatedSession(string userId, UserSession session)
+    {
+        if (_authenticatedSessions.TryGetValue(userId, out var current) && ReferenceEquals(current, session))
+            _authenticatedSessions.TryRemove(userId, out _);
     }
 
     // 반드시 세션의 현재 tick 스레드 내에서 호출할 것 (월드 이동 시 핸들러에서 호출).
