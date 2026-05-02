@@ -123,17 +123,8 @@ public class UserSession : IDisposable, ITickable, IMessageQueueReceiver, ISessi
         int drained = 0;
         while (drained < SessionConstInfo.MaxMessagesPerTick && _messageChannel.Reader.TryRead(out var message))
         {
-            if (message is RemoteReceiveMessage remote && !IsAuthenticated)
-            {
-                var payloadCase = remote.MessageWrapper.PayloadCase;
-                if (payloadCase != MessageWrapper.PayloadOneofCase.LoginRequest &&
-                    payloadCase != MessageWrapper.PayloadOneofCase.KeepAliveRequest)
-                {
-                    RemoteReceiveMessage.Return(remote);
-                    Disconnect();
-                    return;
-                }
-            }
+            if (IsBlockedBeforeAuth(message))
+                return;
 
             await MessageQueueDispatcher.Instance.OnRecvMessageAsync(this, _sender, message);
             drained++;
@@ -169,6 +160,22 @@ public class UserSession : IDisposable, ITickable, IMessageQueueReceiver, ISessi
     }
 
     internal bool EnqueueSqlRequest(ISqlRequest request) => _sqlWorkerManager.Enqueue(request);
+
+    // 미인증 세션이 Login/KeepAlive 외 메시지를 보내면 연결 끊고 true 반환
+    private bool IsBlockedBeforeAuth(IMessageQueue message)
+    {
+        if (IsAuthenticated || message is not RemoteReceiveMessage remote)
+            return false;
+
+        var payloadCase = remote.MessageWrapper.PayloadCase;
+        if (payloadCase == MessageWrapper.PayloadOneofCase.LoginRequest ||
+            payloadCase == MessageWrapper.PayloadOneofCase.KeepAliveRequest)
+            return false;
+
+        RemoteReceiveMessage.Return(remote);
+        Disconnect();
+        return true;
+    }
 
     public bool TryConsumeLoginAttempt()
     {
