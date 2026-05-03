@@ -29,11 +29,14 @@ public class ReceiverHandler : IDisposable
 
     public void Reset()
     {
-        if (_socket != null)
+        // 로컬에 캡처해 race condition으로 _socket이 null이 되어도 NRE 방지
+        var socket = _socket;
+        _socket = null;
+
+        if (socket != null)
         {
-            try { _socket.Shutdown(SocketShutdown.Both); } catch { }
-            try { _socket.Close(); } catch { }
-            _socket = null;
+            try { socket.Shutdown(SocketShutdown.Both); } catch { }
+            try { socket.Close(); } catch { }
         }
         _parser.Reset();
     }
@@ -81,18 +84,13 @@ public class ReceiverHandler : IDisposable
 
     private void Disconnected()
     {
-        if (_socket != null)
+        var socket = _socket;
+        _socket = null;
+
+        if (socket != null)
         {
-            try
-            {
-                _socket?.Shutdown(SocketShutdown.Send);
-                _socket?.Close();
-            }
-            catch { }
-            finally
-            {
-                _socket = null;
-            }
+            try { socket.Shutdown(SocketShutdown.Send); } catch { }
+            try { socket.Close(); } catch { }
         }
 
         if (_receiver is ISessionUsable sessionUsable)
