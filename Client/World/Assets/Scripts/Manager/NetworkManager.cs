@@ -53,6 +53,9 @@ namespace Game.Manager
             Instance = this;
             DontDestroyOnLoad(gameObject);
 
+            // 포커스 잃어도 Update 계속 돌게 해서 KeepAlive 송신이 멈추지 않도록 함
+            Application.runInBackground = true;
+
             _client = new TcpGameClient();
             _dispatcher = new MessageDispatcher();
 

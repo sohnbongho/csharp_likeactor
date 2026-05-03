@@ -171,11 +171,12 @@ public class UserSession : IDisposable, ITickable, IMessageQueueReceiver, ISessi
         AccountData = data;
         _lastKeepAliveReceivedAt = Stopwatch.GetTimestamp();
         _userManager.RegisterAuthenticatedSession(data.UserId, this);
+        _logger.Debug(() => $"KeepAlive OnAuthenticated: {_lastKeepAliveReceivedAt} now:{DateTime.Now}");
     }
 
     internal void UpdateKeepAlive()
     {
-        _lastKeepAliveReceivedAt = Stopwatch.GetTimestamp();
+        _lastKeepAliveReceivedAt = Stopwatch.GetTimestamp();        
     }
 
     internal bool EnqueueSqlRequest(ISqlRequest request) => _sqlWorkerManager.Enqueue(request);
