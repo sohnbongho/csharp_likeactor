@@ -71,7 +71,10 @@ namespace Game.Manager
 
         public void SendLogin()
         {
-            var hash = SHA256.HashData(Encoding.UTF8.GetBytes(password));
+            byte[] hash;
+            using (var sha = SHA256.Create())
+                hash = sha.ComputeHash(Encoding.UTF8.GetBytes(password));
+
             _client.Send(new MessageWrapper
             {
                 LoginRequest = new LoginRequest

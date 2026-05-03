@@ -50,6 +50,16 @@ ExportedObj/
 *.mdb.meta
 *.FbxPrefab
 
+# Unity 진단/모바일/Addressables (사용 시 자동 적용)
+sysinfo.txt
+*.aar
+*.dSYM/
+[Aa]ssets/[Ss]treamingAssets/aa/
+
+# Unity Cloud Build / Analytics
+UnityCloudBuildManifest.json
+[Aa]ssets/[Aa]ssetStoreTools*
+
 # Crashlytics
 crashlytics-build.properties
 

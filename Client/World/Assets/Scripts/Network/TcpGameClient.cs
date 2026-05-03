@@ -3,6 +3,7 @@ using System.Collections.Concurrent;
 using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
+using Google.Protobuf;
 using Messages;
 using UnityEngine;
 
