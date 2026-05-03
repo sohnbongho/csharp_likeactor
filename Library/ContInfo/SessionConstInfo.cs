@@ -17,4 +17,6 @@ public static class SessionConstInfo
     public const int BanDurationMinutes = 10;              // 밴 지속 시간 (분)
     public const int MaxMessagesPerTick = 50;               // tick당 세션 하나에서 처리할 최대 메시지 수
     public const int MaxMessageChannelCapacity = 1000;      // 세션당 수신 채널 용량 (초과 시 세션 강제 종료)
+    public const int KeepAliveIntervalSeconds = 3;          // 클라이언트 KeepAlive 전송 주기
+    public const int KeepAliveTimeoutSeconds = 10;          // 서버 KeepAlive 타임아웃 (초과 시 세션 종료)
 }

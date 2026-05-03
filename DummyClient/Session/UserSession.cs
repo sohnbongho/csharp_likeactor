@@ -6,6 +6,7 @@ using Library.Network;
 using Library.Security;
 using Library.Worker.Interface;
 using Messages;
+using System.Diagnostics;
 using System.Net.Sockets;
 using System.Threading.Channels;
 
@@ -21,6 +22,8 @@ public class UserSession : IDisposable, IMessageQueueReceiver, ISessionUsable, I
     private readonly ulong _sessionId;
     private readonly UserObjectPoolManager _userManager;
     private int _disposedFlag;
+    private bool _isAuthenticated;
+    private long _lastKeepAliveSentAt;
 
     public ulong SessionId => _sessionId;
     public string UserId { get; private set; } = string.Empty;
@@ -76,6 +79,17 @@ public class UserSession : IDisposable, IMessageQueueReceiver, ISessionUsable, I
             await MessageQueueDispatcher.Instance.OnRecvMessageAsync(this, _sender, message);
             drained++;
         }
+
+        if (_isAuthenticated)
+        {
+            var now = Stopwatch.GetTimestamp();
+            var elapsed = (now - _lastKeepAliveSentAt) / (double)Stopwatch.Frequency;
+            if (elapsed >= SessionConstInfo.KeepAliveIntervalSeconds)
+            {
+                _lastKeepAliveSentAt = now;
+                Send(new MessageWrapper { KeepAliveRequest = new KeepAliveRequest() });
+            }
+        }
     }
 
     public ValueTask<bool> EnqueueMessageAsync(IMessageQueue message)
@@ -92,12 +106,19 @@ public class UserSession : IDisposable, IMessageQueueReceiver, ISessionUsable, I
         return _sender.Send(message);
     }
 
+    public void OnAuthenticated()
+    {
+        _isAuthenticated = true;
+        _lastKeepAliveSentAt = Stopwatch.GetTimestamp();
+    }
+
     public void Disconnect() => Dispose();
 
     public void Dispose()
     {
         if (Interlocked.CompareExchange(ref _disposedFlag, 1, 0) != 0)
             return;
+        _isAuthenticated = false;
         _client?.Dispose();
     }
 }

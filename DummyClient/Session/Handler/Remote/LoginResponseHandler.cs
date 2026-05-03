@@ -1,3 +1,4 @@
+using DummyClient.Session;
 using Library.Logger;
 using Library.MessageQueue;
 using Library.MessageQueue.Attributes.Remote;
@@ -16,7 +17,8 @@ public class LoginResponseHandler : IRemoteMessageHandlerAsync
 
         if (resp.Success)
         {
-            receiver.Send(new MessageWrapper { KeepAliveRequest = new KeepAliveRequest() });
+            if (receiver is UserSession session)
+                session.OnAuthenticated();
         }
         else
         {

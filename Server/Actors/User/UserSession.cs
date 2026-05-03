@@ -9,6 +9,7 @@ using Library.Worker.Interface;
 using Messages;
 using Server.Actors.User.DbRequest.Sql;
 using Server.Actors.User.Model;
+using System.Diagnostics;
 using System.Net.Sockets;
 using System.Threading.Channels;
 
@@ -34,6 +35,7 @@ public class UserSession : IDisposable, ITickable, IMessageQueueReceiver, ISessi
     private UserConnectionComponent? _userConnection;
     private ulong _sessionId;
     private int _disposedFlag;
+    private long _lastKeepAliveReceivedAt;
 
     private int _loginAttemptCount;
     private long _loginWindowStart;
@@ -70,6 +72,7 @@ public class UserSession : IDisposable, ITickable, IMessageQueueReceiver, ISessi
         AccountData = null;
         _loginAttemptCount = 0;
         _loginWindowStart = 0;
+        _lastKeepAliveReceivedAt = 0;
 
         while (_messageChannel.Reader.TryRead(out var msg))
         {
@@ -131,6 +134,16 @@ public class UserSession : IDisposable, ITickable, IMessageQueueReceiver, ISessi
         }
 
         _timerScheduleManager.Tick();
+
+        if (IsAuthenticated)
+        {
+            var elapsed = (Stopwatch.GetTimestamp() - _lastKeepAliveReceivedAt) / (double)Stopwatch.Frequency;
+            if (elapsed > SessionConstInfo.KeepAliveTimeoutSeconds)
+            {
+                _logger.Warn(() => $"KeepAlive 타임아웃 세션 종료: {_sessionId}");
+                Disconnect();
+            }
+        }
     }
 
     public ValueTask<bool> EnqueueMessageAsync(IMessageQueue message)
@@ -156,7 +169,13 @@ public class UserSession : IDisposable, ITickable, IMessageQueueReceiver, ISessi
     internal void OnAuthenticated(UserAccountData data)
     {
         AccountData = data;
+        _lastKeepAliveReceivedAt = Stopwatch.GetTimestamp();
         _userManager.RegisterAuthenticatedSession(data.UserId, this);
+    }
+
+    internal void UpdateKeepAlive()
+    {
+        _lastKeepAliveReceivedAt = Stopwatch.GetTimestamp();
     }
 
     internal bool EnqueueSqlRequest(ISqlRequest request) => _sqlWorkerManager.Enqueue(request);
