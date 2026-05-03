@@ -1,3 +1,4 @@
+using Library.AdminApi;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Server.AdminApi.Controllers;
@@ -14,5 +15,5 @@ public class StatsController : ControllerBase
     }
 
     [HttpGet]
-    public ActionResult<StatsSnapshot> Get() => Ok(_stats.Snapshot());
+    public ActionResult<StatsDto> Get() => Ok(_stats.Snapshot());
 }

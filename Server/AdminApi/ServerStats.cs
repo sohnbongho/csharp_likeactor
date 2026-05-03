@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using Library.AdminApi;
 using Library.Network;
 using Server.Actors;
 
@@ -19,7 +20,7 @@ public class ServerStats
         _prevTick = Stopwatch.GetTimestamp();
     }
 
-    public StatsSnapshot Snapshot()
+    public StatsDto Snapshot()
     {
         _process.Refresh();
         var currCpuTime = _process.TotalProcessorTime;
@@ -34,7 +35,7 @@ public class ServerStats
 
         var (recv, sent) = PacketStats.Snapshot();
 
-        return new StatsSnapshot
+        return new StatsDto
         {
             ActiveSessions = _userManager.ActiveSessionCount,
             PacketsReceivedTotal = recv,
@@ -44,14 +45,4 @@ public class ServerStats
             UptimeSeconds = (long)(DateTime.UtcNow - _startedAt).TotalSeconds
         };
     }
-}
-
-public class StatsSnapshot
-{
-    public int ActiveSessions { get; set; }
-    public long PacketsReceivedTotal { get; set; }
-    public long PacketsSentTotal { get; set; }
-    public double CpuPercent { get; set; }
-    public double MemoryMb { get; set; }
-    public long UptimeSeconds { get; set; }
 }

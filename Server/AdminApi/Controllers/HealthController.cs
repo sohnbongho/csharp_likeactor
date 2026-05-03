@@ -2,7 +2,7 @@ using Library.Db;
 using Library.Db.Cache;
 using Library.Db.Sql;
 using Microsoft.AspNetCore.Mvc;
-using Server.AdminApi.Models;
+using Library.AdminApi;
 
 namespace Server.AdminApi.Controllers;
 

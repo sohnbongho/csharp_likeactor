@@ -3,7 +3,7 @@ using Library.Db;
 using Library.Security;
 using Microsoft.AspNetCore.Mvc;
 using MySqlConnector;
-using Server.AdminApi.Models;
+using Library.AdminApi;
 
 namespace Server.AdminApi.Controllers;
 

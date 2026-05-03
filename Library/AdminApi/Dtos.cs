@@ -1,4 +1,4 @@
-namespace Server.AdminApi.Models;
+namespace Library.AdminApi;
 
 public class LoginRequestDto
 {
@@ -40,4 +40,14 @@ public class HealthDto
     public string Status { get; set; } = "ok";
     public string Db { get; set; } = "unknown";
     public string Redis { get; set; } = "unknown";
+}
+
+public class StatsDto
+{
+    public int ActiveSessions { get; set; }
+    public long PacketsReceivedTotal { get; set; }
+    public long PacketsSentTotal { get; set; }
+    public double CpuPercent { get; set; }
+    public double MemoryMb { get; set; }
+    public long UptimeSeconds { get; set; }
 }

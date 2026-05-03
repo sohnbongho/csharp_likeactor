@@ -1,6 +1,6 @@
 using Library.Db.Broadcast;
 using Microsoft.AspNetCore.Mvc;
-using Server.AdminApi.Models;
+using Library.AdminApi;
 
 namespace Server.AdminApi.Controllers;
 

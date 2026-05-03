@@ -2,7 +2,7 @@ using Dapper;
 using Library.Db;
 using Microsoft.AspNetCore.Mvc;
 using MySqlConnector;
-using Server.AdminApi.Models;
+using Library.AdminApi;
 
 namespace Server.AdminApi.Controllers;
 
