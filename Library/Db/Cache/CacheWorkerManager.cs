@@ -50,4 +50,7 @@ public class CacheWorkerManager
 
     // RedisBroadcastManager와 ConnectionMultiplexer 공유
     public ISubscriber GetSubscriber() => _multiplexer.GetSubscriber();
+
+    // AdminApi 등 직접 Redis I/O가 필요한 곳에서 사용
+    public IDatabase GetDatabase() => _multiplexer.GetDatabase();
 }

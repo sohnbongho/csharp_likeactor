@@ -109,6 +109,20 @@ public class UserObjectPoolManager
             kv.Value.Send(message);
     }
 
+    public IEnumerable<UserSession> EnumerateSessions()
+    {
+        foreach (var kv in _activeSessions)
+            yield return kv.Value;
+    }
+
+    public bool TryDisconnect(ulong sessionId)
+    {
+        if (!_activeSessions.TryGetValue(sessionId, out var session))
+            return false;
+        session.Disconnect();
+        return true;
+    }
+
     public void ShutdownAll()
     {
         lock (_shutdownLock)

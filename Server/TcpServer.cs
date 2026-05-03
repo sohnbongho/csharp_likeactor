@@ -7,6 +7,7 @@ using Library.Logger;
 using Library.World;
 using Server.Acceptor;
 using Server.Actors;
+using Server.AdminApi;
 using System.Diagnostics;
 
 namespace Server;
@@ -14,6 +15,8 @@ namespace Server;
 public class TcpServer
 {
     private readonly int _port;
+    private readonly DbConfig _dbConfig;
+    private readonly AdminApiConfig _adminApiConfig;
     private static readonly IServerLogger _logger = ServerLoggerFactory.CreateLogger();
     private readonly UserObjectPoolManager _userObjectPoolManager;
     private readonly LobbyThreadManager _lobbyThreadManager;
@@ -22,13 +25,16 @@ public class TcpServer
     private readonly SqlWorkerManager _sqlWorkerManager;
     private readonly CacheWorkerManager _cacheWorkerManager;
     private readonly RedisBroadcastManager _broadcastManager;
+    private readonly AdminApiHost _adminApiHost = new();
     private readonly ManualResetEvent _shutdownEvent = new(false);
     private readonly CancellationTokenSource _monitorCts = new();
     private Task? _monitorTask;
 
-    public TcpServer(int port, DbConfig dbConfig)
+    public TcpServer(int port, DbConfig dbConfig, AdminApiConfig adminApiConfig)
     {
         _port = port;
+        _dbConfig = dbConfig;
+        _adminApiConfig = adminApiConfig;
         _lobbyThreadManager = new LobbyThreadManager();
         _worldThreadManager = new WorldThreadManager();
         _sqlWorkerManager = new SqlWorkerManager(dbConfig);
@@ -60,6 +66,11 @@ public class TcpServer
         };
         _acceptor.Init();
         _monitorTask = Task.Run(() => MonitorAsync(_monitorCts.Token));
+
+        _adminApiHost.StartAsync(
+            _adminApiConfig, _dbConfig,
+            _userObjectPoolManager, _sqlWorkerManager, _cacheWorkerManager, _broadcastManager
+        ).GetAwaiter().GetResult();
     }
 
     public void Start()
@@ -76,6 +87,8 @@ public class TcpServer
     public void Stop()
     {
         _logger.Info(() => $"Stop Server");
+
+        _adminApiHost.StopAsync().GetAwaiter().GetResult();
 
         _acceptor.Dispose();
         _userObjectPoolManager.ShutdownAll();

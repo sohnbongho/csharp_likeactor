@@ -1,6 +1,7 @@
 using Library.ContInfo;
 using Library.Db;
 using Microsoft.Extensions.Configuration;
+using Server.AdminApi;
 
 namespace Server;
 
@@ -26,7 +27,16 @@ public class Program
             RetryMaxDelayMs       = int.Parse(configuration["DbWorker:RetryMaxDelayMs"]  ?? "30000"),
         };
 
-        var server = new TcpServer(port: SessionConstInfo.ServerPort, dbConfig);
+        var adminConfig = new AdminApiConfig
+        {
+            Enabled              = bool.Parse(configuration["AdminApi:Enabled"] ?? "true"),
+            HttpsPort            = int.Parse(configuration["AdminApi:HttpsPort"] ?? "9001"),
+            Admins               = configuration.GetSection("AdminApi:Admins").Get<string[]>() ?? Array.Empty<string>(),
+            SessionKeyTtlMinutes = int.Parse(configuration["AdminApi:SessionKeyTtlMinutes"] ?? "60"),
+            RedisKeyPrefix       = configuration["AdminApi:RedisKeyPrefix"] ?? "admin:session:",
+        };
+
+        var server = new TcpServer(port: SessionConstInfo.ServerPort, dbConfig, adminConfig);
         server.Init();
         Console.CancelKeyPress += (sender, e) =>
         {
