@@ -83,9 +83,16 @@ public class ReceiverHandler : IDisposable
     {
         if (_socket != null)
         {
-            try { _socket.Shutdown(SocketShutdown.Send); } catch { }
-            _socket.Close();
-            _socket = null;
+            try
+            {
+                _socket?.Shutdown(SocketShutdown.Send);
+                _socket?.Close();
+            }
+            catch { }
+            finally
+            {
+                _socket = null;
+            }
         }
 
         if (_receiver is ISessionUsable sessionUsable)

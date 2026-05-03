@@ -191,6 +191,8 @@ namespace Game.EditorTools
             var so = new SerializedObject(spawner);
             so.FindProperty("enemyPrefab").objectReferenceValue = enemyPrefab;
             so.FindProperty("playerTransform").objectReferenceValue = playerTransform;
+            so.FindProperty("spawnRadius").floatValue = 8f;
+            so.FindProperty("verboseLog").boolValue = true;
             so.ApplyModifiedProperties();
         }
 

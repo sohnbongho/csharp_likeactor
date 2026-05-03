@@ -9,15 +9,33 @@ namespace Game.Enemy
         [SerializeField] private Transform playerTransform;
         [SerializeField] private float baseSpawnInterval = 1f;
         [SerializeField] private float minSpawnInterval = 0.1f;
-        [SerializeField] private float spawnRadius = 12f;
+        [SerializeField] private float spawnRadius = 8f;
         [SerializeField] private float difficultyRampSeconds = 60f;
+        [SerializeField] private bool verboseLog = false;
 
-        private float _timer;
+        private float _timer = 0f;
+        private bool _firstFrameLogged;
 
         private void Update()
         {
-            if (GameManager.Instance == null || GameManager.Instance.State != GameState.Playing) return;
-            if (enemyPrefab == null || playerTransform == null) return;
+            if (GameManager.Instance == null)
+            {
+                if (verboseLog && !_firstFrameLogged) Debug.LogWarning("[Spawner] GameManager.Instance == null");
+                _firstFrameLogged = true;
+                return;
+            }
+            if (GameManager.Instance.State != GameState.Playing)
+            {
+                if (verboseLog && !_firstFrameLogged) Debug.LogWarning($"[Spawner] State={GameManager.Instance.State} (Playing 아님)");
+                _firstFrameLogged = true;
+                return;
+            }
+            if (enemyPrefab == null || playerTransform == null)
+            {
+                if (verboseLog && !_firstFrameLogged) Debug.LogWarning($"[Spawner] enemyPrefab={enemyPrefab}, player={playerTransform}");
+                _firstFrameLogged = true;
+                return;
+            }
 
             _timer -= Time.deltaTime;
             if (_timer > 0f) return;
@@ -34,6 +52,7 @@ namespace Game.Enemy
             var enemy = Instantiate(enemyPrefab, pos, Quaternion.identity);
             if (enemy.TryGetComponent(out EnemyController ctrl))
                 ctrl.Init(playerTransform);
+            if (verboseLog) Debug.Log($"[Spawner] 적 스폰 @ {pos} (총 적 수: {GameObject.FindObjectsByType<EnemyController>(FindObjectsSortMode.None).Length})");
         }
     }
 }

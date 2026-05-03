@@ -22,6 +22,10 @@ namespace Game.Manager
         public string userId = "user_00001";
         public string password = "Test1234!";
 
+        [Header("Debug")]
+        [SerializeField] private bool verboseKeepAliveLog = true;
+        [SerializeField] private bool periodicStatusLog = true;
+
         public event Action OnConnected;
         public event Action OnLoginSuccess;
         public event Action<int> OnLoginFailed;
@@ -31,8 +35,10 @@ namespace Game.Manager
         private TcpGameClient _client;
         private MessageDispatcher _dispatcher;
         private bool _isAuthenticated;
-        private float _lastKeepAliveSentAt;
+        private float _lastKeepAliveSentAt = float.NegativeInfinity;
+        private float _lastStatusLogAt;
         private const float KeepAliveIntervalSeconds = 3f;
+        private const float StatusLogIntervalSeconds = 1f;
 
         public bool IsConnected => _client != null && _client.IsConnected;
         public bool IsAuthenticated => _isAuthenticated;
@@ -58,13 +64,20 @@ namespace Game.Manager
 
         public async Task<bool> ConnectAsync()
         {
+            Debug.Log($"[Net] ConnectAsync 시작 → {serverHost}:{serverPort}");
             var ok = await _client.ConnectAsync(serverHost, serverPort);
-            if (ok) OnConnected?.Invoke();
+            Debug.Log($"[Net] ConnectAsync 결과: {ok}");
+            if (ok)
+            {
+                _lastKeepAliveSentAt = Time.realtimeSinceStartup;
+                OnConnected?.Invoke();
+            }
             return ok;
         }
 
         public void Disconnect()
         {
+            Debug.LogWarning($"[Net] Disconnect 호출 (auth={_isAuthenticated})");
             _client?.Disconnect();
             _isAuthenticated = false;
         }
@@ -110,6 +123,7 @@ namespace Game.Manager
         {
             _isAuthenticated = true;
             _lastKeepAliveSentAt = Time.realtimeSinceStartup;
+            Debug.Log($"[Net] 로그인 성공 → 인증 ON, KeepAlive 카운터 리셋");
             OnLoginSuccess?.Invoke();
         }
 
@@ -124,12 +138,26 @@ namespace Game.Manager
             while (_client.ReceiveQueue.TryDequeue(out var message))
                 _dispatcher.Dispatch(message);
 
-            if (_isAuthenticated && _client.IsConnected)
+            var now = Time.realtimeSinceStartup;
+            var connected = _client.IsConnected;
+
+            // 1초마다 현재 상태 로그 (KeepAlive가 안 가는 원인 추적용)
+            if (periodicStatusLog && now - _lastStatusLogAt >= StatusLogIntervalSeconds)
             {
-                if (Time.realtimeSinceStartup - _lastKeepAliveSentAt >= KeepAliveIntervalSeconds)
+                _lastStatusLogAt = now;
+                Debug.Log($"[Net status] connected={connected} auth={_isAuthenticated} sinceLastSend={(now - _lastKeepAliveSentAt):F1}s");
+            }
+
+            // 연결되어 있으면 인증 여부와 무관하게 KeepAlive 주기 송신.
+            // 서버는 인증된 세션에 한해 타임아웃을 검사하므로 송신해도 안전하다.
+            if (connected)
+            {
+                if (now - _lastKeepAliveSentAt >= KeepAliveIntervalSeconds)
                 {
-                    _lastKeepAliveSentAt = Time.realtimeSinceStartup;
+                    _lastKeepAliveSentAt = now;
                     _client.Send(new MessageWrapper { KeepAliveRequest = new KeepAliveRequest() });
+                    if (verboseKeepAliveLog)
+                        Debug.Log($"[Net] KeepAlive 송신 (t={now:F1}, auth={_isAuthenticated})");
                 }
             }
         }

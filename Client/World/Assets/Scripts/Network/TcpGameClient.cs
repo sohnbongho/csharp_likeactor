@@ -20,7 +20,7 @@ namespace Game.Network
         private readonly byte[] _sendBuffer = new byte[ReceiveParser.MaxBufferSize];
         private int _isSending;
 
-        public bool IsConnected => _client != null && _client.Connected;
+        public bool IsConnected => _client != null && _stream != null && _client.Connected;
         public ConcurrentQueue<MessageWrapper> ReceiveQueue => _receiveQueue;
 
         public async Task<bool> ConnectAsync(string host, int port)
@@ -44,6 +44,11 @@ namespace Game.Network
 
         public void Send(MessageWrapper message)
         {
+            if (_stream == null)
+            {
+                Debug.LogWarning($"[Tcp] Send 호출했지만 stream=null, 메시지 드롭 ({message.PayloadCase})");
+                return;
+            }
             _sendQueue.Enqueue(message);
             if (Interlocked.CompareExchange(ref _isSending, 1, 0) == 0)
                 _ = Task.Run(ProcessSendQueueAsync);
@@ -55,10 +60,17 @@ namespace Game.Network
             {
                 while (_sendQueue.TryDequeue(out var message))
                 {
+                    var stream = _stream;
+                    if (stream == null)
+                    {
+                        Debug.LogWarning("[Tcp] ProcessSendQueueAsync 도중 stream=null, 중단");
+                        return;
+                    }
+
                     int bodyLength = message.CalculateSize();
                     if (bodyLength > ReceiveParser.MaxMessageBodySize)
                     {
-                        Debug.LogWarning($"[TcpGameClient] 메시지 크기 초과 ({bodyLength}), 드롭");
+                        Debug.LogWarning($"[Tcp] 메시지 크기 초과 ({bodyLength}), 드롭");
                         continue;
                     }
 
@@ -66,13 +78,13 @@ namespace Game.Network
                     _sendBuffer[1] = (byte)((bodyLength >> 8) & 0xFF);
                     message.WriteTo(_sendBuffer.AsSpan(2, bodyLength));
 
-                    await _stream.WriteAsync(_sendBuffer, 0, 2 + bodyLength);
+                    await stream.WriteAsync(_sendBuffer, 0, 2 + bodyLength);
                 }
             }
             catch (Exception ex)
             {
-                Debug.LogError($"[TcpGameClient] 송신 오류: {ex.Message}");
-                Disconnect();
+                Debug.LogError($"[Tcp] 송신 예외: {ex.GetType().Name} {ex.Message}");
+                Disconnect("send-exception");
             }
             finally
             {
@@ -92,7 +104,8 @@ namespace Game.Network
                     int read = await _stream.ReadAsync(seg.Array, seg.Offset, seg.Count, token);
                     if (read <= 0)
                     {
-                        Disconnect();
+                        Debug.LogWarning("[Tcp] Read 결과 0 (서버가 연결 종료)");
+                        Disconnect("recv-eof");
                         return;
                     }
 
@@ -104,13 +117,15 @@ namespace Game.Network
             catch (OperationCanceledException) { }
             catch (Exception ex)
             {
-                Debug.LogError($"[TcpGameClient] 수신 오류: {ex.Message}");
-                Disconnect();
+                Debug.LogError($"[Tcp] 수신 예외: {ex.GetType().Name} {ex.Message}");
+                Disconnect("recv-exception");
             }
         }
 
-        public void Disconnect()
+        public void Disconnect(string reason = "manual")
         {
+            if (_client == null && _stream == null) return;
+            Debug.LogWarning($"[Tcp] Disconnect (reason={reason})");
             try { _cts?.Cancel(); } catch { }
             try { _stream?.Close(); } catch { }
             try { _client?.Close(); } catch { }
