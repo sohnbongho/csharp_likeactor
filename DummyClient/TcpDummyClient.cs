@@ -7,18 +7,21 @@ namespace DummyClient;
 
 public class TcpDummyClient
 {
-    private const string ServerIp = "127.0.0.1";
-    private const int ServerPort = 9000;
     private static readonly IServerLogger _logger = ServerLoggerFactory.CreateLogger();
 
     private readonly UserObjectPoolManager _userObjectPoolManager;
     private readonly LobbyThreadManager _lobbyThreadManager;
     private readonly ManualResetEvent _shutdownEvent = new(false);
-    private readonly int _maxClientCount = 10000;
+    private readonly string _serverIp;
+    private readonly int _serverPort;
+    private readonly int _maxClientCount;
     private readonly ConcurrentQueue<UserSession> _connectedUsers = new();
 
-    public TcpDummyClient()
+    public TcpDummyClient(string serverIp, int serverPort, int maxClientCount)
     {
+        _serverIp = serverIp;
+        _serverPort = serverPort;
+        _maxClientCount = maxClientCount;
         _lobbyThreadManager = new LobbyThreadManager();
         _userObjectPoolManager = new UserObjectPoolManager(_lobbyThreadManager);
     }
@@ -40,7 +43,7 @@ public class TcpDummyClient
             {
                 var userSession = _userObjectPoolManager.RentUser();
                 userSession.Run(i + 1);
-                await userSession.ConnectAsync(ServerIp, ServerPort);
+                await userSession.ConnectAsync(_serverIp, _serverPort);
                 _connectedUsers.Enqueue(userSession);
 
                 if ((i + 1) % batchSize == 0 || i + 1 == _maxClientCount)

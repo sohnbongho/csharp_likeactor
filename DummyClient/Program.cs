@@ -22,7 +22,11 @@ public class Program
 
         await Task.Delay(2000);
 
-        var tcpDummyClient = new TcpDummyClient();
+        var serverIp        = configuration["Client:ServerIp"] ?? "127.0.0.1";
+        var serverPort      = int.Parse(configuration["Client:ServerPort"] ?? "9000");
+        var maxClientCount  = int.Parse(configuration["Client:MaxClientCount"] ?? "1000");
+
+        var tcpDummyClient = new TcpDummyClient(serverIp, serverPort, maxClientCount);
         tcpDummyClient.Init();
 
         await tcpDummyClient.StartAsync();

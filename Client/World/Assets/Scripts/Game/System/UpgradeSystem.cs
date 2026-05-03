@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using Game.Player;
 using UnityEngine;
 
-namespace Game.System
+namespace Game.Systems
 {
     public enum UpgradeType
     {

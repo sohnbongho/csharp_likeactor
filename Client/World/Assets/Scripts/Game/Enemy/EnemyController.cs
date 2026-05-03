@@ -1,6 +1,6 @@
 using Game.Manager;
 using Game.Player;
-using Game.System;
+using Game.Systems;
 using UnityEngine;
 
 namespace Game.Enemy
