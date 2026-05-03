@@ -49,3 +49,5 @@ DummyClient/obj/*
 
 Library/bin/*
 Library/obj/*
+/.claude/settings.local.json
+/Server/appsettings.json
