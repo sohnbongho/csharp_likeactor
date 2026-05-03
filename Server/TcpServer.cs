@@ -64,9 +64,9 @@ public class TcpServer
 
     public void Start()
     {
-        var mysqlOk = _sqlWorkerManager.CheckConnectionAsync().GetAwaiter().GetResult();
-        var redisOk  = _cacheWorkerManager.CheckConnectionAsync().GetAwaiter().GetResult();
-        _logger.Info(() => $"[DB Connect] MySQL: {(mysqlOk ? "Conneted" : "DisConnected")} | Redis: {(redisOk ? "Conneted" : "DisConnected")}");
+        //var mysqlOk = _sqlWorkerManager.CheckConnectionAsync().GetAwaiter().GetResult();
+        //var redisOk  = _cacheWorkerManager.CheckConnectionAsync().GetAwaiter().GetResult();
+        //_logger.Info(() => $"[DB Connect] MySQL: {(mysqlOk ? "Conneted" : "DisConnected")} | Redis: {(redisOk ? "Conneted" : "DisConnected")}");
 
         _logger.Info(() => $"Server Start Listen Port:{_port}...");
         _acceptor.Start();

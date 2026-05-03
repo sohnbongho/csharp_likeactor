@@ -6,18 +6,13 @@ namespace DummyClient;
 
 public static class AccountSeeder
 {
-    private const string ConnectionString =
-        "Server=172.26.237.239;Database=gamedb;User=dance;Password=Crazy1!crazy;CharSet=utf8mb4;Connection Timeout=30;";
-    private const string Password = "Test1234!";
-    private const int AccountCount = 10000;
-
-    public static async Task SeedAsync()
+    public static async Task SeedAsync(string connectionString, string password, int accountCount)
     {
-        Console.WriteLine($"[Seeder] {AccountCount}개 계정 생성 시작...");
+        Console.WriteLine($"[Seeder] {accountCount}개 계정 생성 시작...");
 
-        var clientHash = PasswordHashHelper.ComputeClientHash(Password);
+        var clientHash = PasswordHashHelper.ComputeClientHash(password);
 
-        await using var connection = new MySqlConnection(ConnectionString);
+        await using var connection = new MySqlConnection(connectionString);
         await connection.OpenAsync();
 
         await connection.ExecuteAsync(@"
@@ -35,7 +30,7 @@ public static class AccountSeeder
         Console.WriteLine("[Seeder] 테이블 준비 완료");
 
         int inserted = 0;
-        for (int i = 1; i <= AccountCount; i++)
+        for (int i = 1; i <= accountCount; i++)
         {
             var userId = $"user_{i:D5}";
             var (hashBase64, saltBase64) = PasswordHashHelper.GenerateStoredHash(clientHash);
@@ -47,7 +42,7 @@ public static class AccountSeeder
             inserted += affected;
 
             if (i % 1000 == 0)
-                Console.WriteLine($"[Seeder] {i}/{AccountCount}");
+                Console.WriteLine($"[Seeder] {i}/{accountCount}");
         }
 
         Console.WriteLine($"[Seeder] 완료: {inserted}개 신규 삽입 (중복 제외)");
