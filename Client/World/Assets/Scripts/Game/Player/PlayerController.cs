@@ -1,3 +1,4 @@
+using Game.Manager;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
@@ -7,9 +8,13 @@ namespace Game.Player
     public class PlayerController : MonoBehaviour
     {
         [SerializeField] private float moveSpeed = 5f;
+        [SerializeField] private float networkSendInterval = 0.1f; // 10Hz
 
         private Rigidbody2D _rb;
         private Vector2 _input;
+        private Vector2 _prevInput;
+        private NetworkManager _net;
+        private float _sendTimer;
 
         public float MoveSpeed { get => moveSpeed; set => moveSpeed = value; }
 
@@ -18,6 +23,11 @@ namespace Game.Player
             _rb = GetComponent<Rigidbody2D>();
             _rb.gravityScale = 0f;
             _rb.freezeRotation = true;
+        }
+
+        private void Start()
+        {
+            _net = NetworkManager.Instance;
         }
 
         private void Update()
@@ -36,6 +46,22 @@ namespace Game.Player
         private void FixedUpdate()
         {
             _rb.linearVelocity = _input * moveSpeed;
+
+            if (_net == null || !_net.IsAuthenticated)
+                return;
+
+            bool hasInput = _input != Vector2.zero;
+            bool justStopped = !hasInput && _prevInput != Vector2.zero;
+
+            _sendTimer += Time.fixedDeltaTime;
+            if (justStopped || (hasInput && _sendTimer >= networkSendInterval))
+            {
+                _sendTimer = 0f;
+                var pos = (Vector2)transform.position;
+                _net.SendMove(pos.x, pos.y);
+            }
+
+            _prevInput = _input;
         }
     }
 }

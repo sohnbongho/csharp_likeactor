@@ -15,6 +15,8 @@ message MessageWrapper {
 		ErrorResponse error_response = 22;
 		GameOverReport game_over_report = 30;
 		GameOverResponse game_over_response = 31;
+		MoveRequest move_request = 40;
+		MoveResponse move_response = 41;
 	}
 }
 
@@ -69,4 +71,17 @@ message GameOverReport {
 // 게임 종료 응답 (서버 → 클라이언트)
 message GameOverResponse {
     bool success = 1;
+}
+
+// 이동 요청 (클라이언트 → 서버)
+message MoveRequest {
+    float x = 1;
+    float y = 2;
+}
+
+// 이동 응답 (서버 → 클라이언트)
+message MoveResponse {
+    bool success = 1;
+    float x = 2;
+    float y = 3;
 }

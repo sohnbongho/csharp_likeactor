@@ -16,6 +16,7 @@ public class TcpDummyClient
     private readonly int _serverPort;
     private readonly int _maxClientCount;
     private readonly ConcurrentQueue<UserSession> _connectedUsers = new();
+    private UserSession? _playerSession;
 
     public TcpDummyClient(string serverIp, int serverPort, int maxClientCount)
     {
@@ -54,11 +55,51 @@ public class TcpDummyClient
                 }
             }
 
+            if (_connectedUsers.TryPeek(out _playerSession))
+            {
+                _logger.Info(() => $"[키보드] 플레이어: {_playerSession.UserId} | W/A/S/D 또는 방향키=이동, Q=종료");
+                _ = StartKeyboardInputLoopAsync(_playerSession);
+            }
+
             _shutdownEvent.WaitOne();
         }
         catch (Exception ex)
         {
             _logger.Error(() => $"[오류] ", ex);
+        }
+    }
+
+    private async Task StartKeyboardInputLoopAsync(UserSession playerSession)
+    {
+        while (true)
+        {
+            try
+            {
+                if (!Console.KeyAvailable)
+                {
+                    await Task.Delay(30);
+                    continue;
+                }
+
+                var key = Console.ReadKey(intercept: true).Key;
+                float dx = 0f, dy = 0f;
+
+                switch (key)
+                {
+                    case ConsoleKey.W: case ConsoleKey.UpArrow:    dy -= 1f; break;
+                    case ConsoleKey.S: case ConsoleKey.DownArrow:  dy += 1f; break;
+                    case ConsoleKey.A: case ConsoleKey.LeftArrow:  dx -= 1f; break;
+                    case ConsoleKey.D: case ConsoleKey.RightArrow: dx += 1f; break;
+                    case ConsoleKey.Q: Stop(); return;
+                    default: continue;
+                }
+
+                playerSession.SendMove(dx, dy);
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(() => "[키보드] 입력 오류", ex);
+            }
         }
     }
 

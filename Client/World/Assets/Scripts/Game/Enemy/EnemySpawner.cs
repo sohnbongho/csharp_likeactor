@@ -1,4 +1,5 @@
 using Game.Manager;
+using Game.Player;
 using UnityEngine;
 
 namespace Game.Enemy
@@ -14,26 +15,41 @@ namespace Game.Enemy
         [SerializeField] private bool verboseLog = false;
 
         private float _timer = 0f;
-        private bool _firstFrameLogged;
+
+        private void Start()
+        {
+            TryFindPlayer();
+        }
+
+        private void TryFindPlayer()
+        {
+            if (playerTransform != null) return;
+            var pc = FindFirstObjectByType<PlayerController>();
+            if (pc != null)
+            {
+                playerTransform = pc.transform;
+                Debug.Log($"[Spawner] 플레이어 자동 탐색 성공: {pc.gameObject.name}");
+            }
+            else
+            {
+                Debug.LogWarning("[Spawner] 플레이어를 찾지 못했습니다. Inspector에서 playerTransform을 직접 연결하거나 PlayerController가 씬에 있는지 확인하세요.");
+            }
+        }
 
         private void Update()
         {
-            if (GameManager.Instance == null)
+            if (GameManager.Instance == null || GameManager.Instance.State != GameState.Playing)
+                return;
+
+            if (enemyPrefab == null)
             {
-                if (verboseLog && !_firstFrameLogged) Debug.LogWarning("[Spawner] GameManager.Instance == null");
-                _firstFrameLogged = true;
+                Debug.LogWarning("[Spawner] enemyPrefab이 없습니다. Inspector에서 연결하세요.");
                 return;
             }
-            if (GameManager.Instance.State != GameState.Playing)
+
+            if (playerTransform == null)
             {
-                if (verboseLog && !_firstFrameLogged) Debug.LogWarning($"[Spawner] State={GameManager.Instance.State} (Playing 아님)");
-                _firstFrameLogged = true;
-                return;
-            }
-            if (enemyPrefab == null || playerTransform == null)
-            {
-                if (verboseLog && !_firstFrameLogged) Debug.LogWarning($"[Spawner] enemyPrefab={enemyPrefab}, player={playerTransform}");
-                _firstFrameLogged = true;
+                TryFindPlayer();
                 return;
             }
 
@@ -52,7 +68,8 @@ namespace Game.Enemy
             var enemy = Instantiate(enemyPrefab, pos, Quaternion.identity);
             if (enemy.TryGetComponent(out EnemyController ctrl))
                 ctrl.Init(playerTransform);
-            if (verboseLog) Debug.Log($"[Spawner] 적 스폰 @ {pos} (총 적 수: {GameObject.FindObjectsByType<EnemyController>(FindObjectsSortMode.None).Length})");
+            if (verboseLog)
+                Debug.Log($"[Spawner] 적 스폰 @ {pos}");
         }
     }
 }

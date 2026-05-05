@@ -28,6 +28,8 @@ public class UserSession : IDisposable, IMessageQueueReceiver, ISessionUsable, I
     public ulong SessionId => _sessionId;
     public string UserId { get; private set; } = string.Empty;
     public byte[] ClientHashBytes { get; private set; } = Array.Empty<byte>();
+    public float X { get; private set; }
+    public float Y { get; private set; }
 
     public static UserSession Of(TcpClient client, ulong sessionId, UserObjectPoolManager userObjectPoolManager)
     {
@@ -110,6 +112,15 @@ public class UserSession : IDisposable, IMessageQueueReceiver, ISessionUsable, I
     {
         _isAuthenticated = true;
         _lastKeepAliveSentAt = Stopwatch.GetTimestamp();
+    }
+
+    public bool SendMove(float dx, float dy)
+    {
+        if (!_isAuthenticated) return false;
+        X += dx;
+        Y += dy;
+        _logger.Debug(() => $"[이동] {UserId} ({X}, {Y})");
+        return Send(new MessageWrapper { MoveRequest = new MoveRequest { X = X, Y = Y } });
     }
 
     public void Disconnect() => Dispose();

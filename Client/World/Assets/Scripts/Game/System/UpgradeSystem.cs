@@ -47,9 +47,45 @@ namespace Game.Systems
 
         private UpgradeOption[] _currentChoices;
 
+        private void Start()
+        {
+            Debug.Log($"[Upgrade:Start] playerStats={playerStats}, playerController={playerController}, autoAttack={autoAttack}, ultimateSkill={ultimateSkill}");
+
+            if (playerStats == null)
+            {
+                var player = FindFirstObjectByType<PlayerController>();
+                if (player != null)
+                {
+                    playerStats      = player.GetComponent<PlayerStats>();
+                    playerController = player;
+                    autoAttack       = player.GetComponent<AutoAttack>();
+                    ultimateSkill    = player.GetComponent<UltimateSkill>();
+                    Debug.Log($"[Upgrade:Start] 자동 탐색 완료 → playerStats={playerStats}, autoAttack={autoAttack}, ultimateSkill={ultimateSkill}");
+                }
+                else
+                {
+                    Debug.LogError("[Upgrade:Start] PlayerController를 씬에서 찾지 못했습니다!");
+                }
+
+                if (playerStats != null)
+                {
+                    playerStats.OnLevelUp += HandleLevelUp;
+                    Debug.Log("[Upgrade:Start] OnLevelUp 구독 완료 (Start에서 보완)");
+                }
+            }
+        }
+
         private void OnEnable()
         {
-            if (playerStats != null) playerStats.OnLevelUp += HandleLevelUp;
+            if (playerStats != null)
+            {
+                playerStats.OnLevelUp += HandleLevelUp;
+                Debug.Log("[Upgrade:OnEnable] OnLevelUp 구독 완료");
+            }
+            else
+            {
+                Debug.LogWarning("[Upgrade:OnEnable] playerStats가 null — Start에서 보완 예정");
+            }
         }
 
         private void OnDisable()
@@ -59,17 +95,31 @@ namespace Game.Systems
 
         private void HandleLevelUp(int newLevel)
         {
+            Debug.Log($"[Upgrade:HandleLevelUp] 레벨업! newLevel={newLevel}, OnUpgradeOffered 구독자={OnUpgradeOffered?.GetInvocationList().Length ?? 0}개");
+
             _currentChoices = PickRandom(3);
+
+            if (OnUpgradeOffered == null)
+            {
+                Debug.LogWarning("[Upgrade:HandleLevelUp] OnUpgradeOffered 구독자 없음 — 자동 적용");
+                Apply(_currentChoices[0].Type);
+                _currentChoices = null;
+                return;
+            }
+
+            Debug.Log($"[Upgrade:HandleLevelUp] timeScale=0 설정 후 패널 표시 요청");
             Time.timeScale = 0f;
-            OnUpgradeOffered?.Invoke(_currentChoices);
+            OnUpgradeOffered.Invoke(_currentChoices);
         }
 
         public void Choose(int index)
         {
+            Debug.Log($"[Upgrade:Choose] index={index}, _currentChoices={_currentChoices?.Length ?? -1}");
             if (_currentChoices == null || index < 0 || index >= _currentChoices.Length) return;
             Apply(_currentChoices[index].Type);
             _currentChoices = null;
             Time.timeScale = 1f;
+            Debug.Log("[Upgrade:Choose] timeScale=1 복구, 업그레이드 적용 완료");
             OnUpgradeApplied?.Invoke();
         }
 

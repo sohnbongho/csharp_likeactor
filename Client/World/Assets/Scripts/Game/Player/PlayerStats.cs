@@ -53,6 +53,7 @@ namespace Game.Player
                 Xp -= XpToNextLevel;
                 Level++;
                 XpToNextLevel = Mathf.RoundToInt(XpToNextLevel * 1.4f);
+                Debug.Log($"[PlayerStats] 레벨업! Level={Level}, OnLevelUp 구독자={OnLevelUp?.GetInvocationList().Length ?? 0}개");
                 OnLevelUp?.Invoke(Level);
             }
             OnXpChanged?.Invoke(Xp, XpToNextLevel);

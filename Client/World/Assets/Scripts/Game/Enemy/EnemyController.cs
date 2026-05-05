@@ -19,6 +19,7 @@ namespace Game.Enemy
         private Rigidbody2D _rb;
         private Transform _player;
         private float _lastContactAt;
+        private float _findPlayerCooldown;
 
         public float MoveSpeed { get => moveSpeed; set => moveSpeed = value; }
         public int MaxHp { get => maxHp; set => maxHp = value; }
@@ -31,15 +32,36 @@ namespace Game.Enemy
             _hp = maxHp;
         }
 
+        private void Start()
+        {
+            if (_player == null)
+                TryFindPlayer();
+        }
+
         public void Init(Transform playerTransform)
         {
             _player = playerTransform;
             _hp = maxHp;
         }
 
+        private void TryFindPlayer()
+        {
+            var pc = FindFirstObjectByType<PlayerController>();
+            if (pc != null) _player = pc.transform;
+        }
+
         private void FixedUpdate()
         {
-            if (_player == null) return;
+            if (_player == null)
+            {
+                _findPlayerCooldown -= Time.fixedDeltaTime;
+                if (_findPlayerCooldown <= 0f)
+                {
+                    _findPlayerCooldown = 1f;
+                    TryFindPlayer();
+                }
+                return;
+            }
             var dir = ((Vector2)(_player.position - transform.position)).normalized;
             _rb.linearVelocity = dir * moveSpeed;
         }

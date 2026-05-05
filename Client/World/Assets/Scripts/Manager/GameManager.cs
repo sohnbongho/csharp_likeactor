@@ -1,5 +1,7 @@
 using System;
 using UnityEngine;
+using UnityEngine.InputSystem;
+using UnityEngine.SceneManagement;
 
 namespace Game.Manager
 {
@@ -17,6 +19,8 @@ namespace Game.Manager
         public event Action OnGameOver;
         public event Action<int> OnKillCountChanged;
 
+        private bool _fallbackMode;
+
         private void Awake()
         {
             if (Instance != null && Instance != this) { Destroy(gameObject); return; }
@@ -28,6 +32,7 @@ namespace Game.Manager
             State = GameState.Playing;
             KillCount = 0;
             ElapsedSeconds = 0f;
+            _fallbackMode = false;
             Time.timeScale = 1f;
             OnGameStarted?.Invoke();
         }
@@ -42,18 +47,36 @@ namespace Game.Manager
         {
             if (State != GameState.Playing) return;
             State = GameState.GameOver;
-            Time.timeScale = 0f;
 
             var score = KillCount * 10 + Mathf.FloorToInt(ElapsedSeconds);
             NetworkManager.Instance?.SendGameOver(score, KillCount, Mathf.FloorToInt(ElapsedSeconds));
 
-            OnGameOver?.Invoke();
+            if (OnGameOver != null)
+            {
+                Time.timeScale = 0f;
+                Debug.Log($"[GameManager] GameOver — timeScale=0, 구독자={OnGameOver.GetInvocationList().Length}명");
+                OnGameOver.Invoke();
+            }
+            else
+            {
+                _fallbackMode = true;
+                Debug.LogWarning($"[GameManager] GameOver (폴백) — 킬:{KillCount} 생존:{Mathf.FloorToInt(ElapsedSeconds)}초 | R키로 재시작");
+            }
         }
 
         private void Update()
         {
             if (State == GameState.Playing)
+            {
                 ElapsedSeconds += Time.deltaTime;
+                return;
+            }
+
+            if (_fallbackMode && Keyboard.current != null && Keyboard.current.rKey.wasPressedThisFrame)
+            {
+                Time.timeScale = 1f;
+                SceneManager.LoadScene(SceneManager.GetActiveScene().name);
+            }
         }
     }
 }

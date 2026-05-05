@@ -31,6 +31,7 @@ namespace Game.Manager
         public event Action<int> OnLoginFailed;
         public event Action<bool> OnEnterWorldResult;
         public event Action<bool> OnGameOverResult;
+        public event Action<float, float> OnMoveResult;
 
         private TcpGameClient _client;
         private MessageDispatcher _dispatcher;
@@ -63,6 +64,7 @@ namespace Game.Manager
             _dispatcher.Register(MessageWrapper.PayloadOneofCase.LoginResponse, new LoginResponseHandler(this));
             _dispatcher.Register(MessageWrapper.PayloadOneofCase.EnterWorldResponse, new EnterWorldResponseHandler(this));
             _dispatcher.Register(MessageWrapper.PayloadOneofCase.GameOverResponse, new GameOverResponseHandler(this));
+            _dispatcher.Register(MessageWrapper.PayloadOneofCase.MoveResponse, new MoveResponseHandler(this));
         }
 
         public async Task<bool> ConnectAsync()
@@ -109,6 +111,14 @@ namespace Game.Manager
             });
         }
 
+        public void SendMove(float x, float y)
+        {
+            _client.Send(new MessageWrapper
+            {
+                MoveRequest = new MoveRequest { X = x, Y = y }
+            });
+        }
+
         public void SendGameOver(int score, int killCount, int surviveSeconds)
         {
             _client.Send(new MessageWrapper
@@ -121,6 +131,8 @@ namespace Game.Manager
                 }
             });
         }
+
+        internal void RaiseMoveResult(float x, float y) => OnMoveResult?.Invoke(x, y);
 
         internal void RaiseLoginSuccess()
         {
@@ -145,11 +157,11 @@ namespace Game.Manager
             var connected = _client.IsConnected;
 
             // 1초마다 현재 상태 로그 (KeepAlive가 안 가는 원인 추적용)
-            if (periodicStatusLog && now - _lastStatusLogAt >= StatusLogIntervalSeconds)
-            {
-                _lastStatusLogAt = now;
-                Debug.Log($"[Net status] connected={connected} auth={_isAuthenticated} sinceLastSend={(now - _lastKeepAliveSentAt):F1}s");
-            }
+            //if (periodicStatusLog && now - _lastStatusLogAt >= StatusLogIntervalSeconds)
+            //{
+            //    _lastStatusLogAt = now;
+            //    Debug.Log($"[Net status] connected={connected} auth={_isAuthenticated} sinceLastSend={(now - _lastKeepAliveSentAt):F1}s");
+            //}
 
             // 연결되어 있으면 인증 여부와 무관하게 KeepAlive 주기 송신.
             // 서버는 인증된 세션에 한해 타임아웃을 검사하므로 송신해도 안전하다.
@@ -159,8 +171,6 @@ namespace Game.Manager
                 {
                     _lastKeepAliveSentAt = now;
                     _client.Send(new MessageWrapper { KeepAliveRequest = new KeepAliveRequest() });
-                    if (verboseKeepAliveLog)
-                        Debug.Log($"[Net] KeepAlive 송신 (t={now:F1}, auth={_isAuthenticated})");
                 }
             }
         }

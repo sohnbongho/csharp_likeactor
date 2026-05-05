@@ -14,6 +14,13 @@ namespace Game.UI
 
         private void Start()
         {
+            if (upgradeSystem == null)
+            {
+                upgradeSystem = FindFirstObjectByType<UpgradeSystem>();
+                if (upgradeSystem == null)
+                    Debug.LogWarning("[UpgradeUI] UpgradeSystem을 찾지 못했습니다. 씬에 UpgradeSystem이 있는지 확인하세요.");
+            }
+
             if (upgradeSystem != null)
                 upgradeSystem.OnUpgradeOffered += Show;
 
@@ -54,7 +61,11 @@ namespace Game.UI
 
         private void OnChoiceClicked(int index)
         {
-            if (upgradeSystem != null) upgradeSystem.Choose(index);
+            if (upgradeSystem != null)
+                upgradeSystem.Choose(index);
+            else
+                Time.timeScale = 1f; // upgradeSystem 없어도 반드시 복구
+
             if (panel != null) panel.SetActive(false);
         }
     }

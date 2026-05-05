@@ -19,6 +19,8 @@ public class UserSession : IDisposable, ITickable, IMessageQueueReceiver, ISessi
 {
     public ulong SessionId => _sessionId;
     public ulong WorldId { get; private set; }
+    public float X { get; private set; }
+    public float Y { get; private set; }
 
     public UserAccountData? AccountData { get; private set; }
     public bool IsAuthenticated => AccountData != null;
@@ -163,6 +165,12 @@ public class UserSession : IDisposable, ITickable, IMessageQueueReceiver, ISessi
     public void Disconnect() => Dispose();
 
     public void MoveToWorld(ulong worldId) => _userManager.MoveToWorld(this, worldId);
+
+    public void UpdatePosition(float x, float y)
+    {
+        X = x;
+        Y = y;
+    }
 
     internal void SetWorldId(ulong worldId) => WorldId = worldId;
 
