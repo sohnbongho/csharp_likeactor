@@ -56,6 +56,7 @@ public class ValidateTokenCacheRequest : ICacheRequest
             }
         }
 
-        await Session!.EnqueueMessageAsync(new InnerReceiveMessage { Message = result });
+        if (Session == null) return;
+        await Session.EnqueueMessageAsync(new InnerReceiveMessage { Message = result });
     }
 }

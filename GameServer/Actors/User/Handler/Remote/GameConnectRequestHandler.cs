@@ -9,7 +9,7 @@ namespace GameServer.Actors.User.Handler.Remote;
 [RemoteMessageHandlerAsyncAttribute(MessageWrapper.PayloadOneofCase.GameConnectRequest)]
 public class GameConnectRequestHandler : IRemoteMessageHandlerAsync
 {
-    internal static string AuthTokenPrefix = "auth:token:";
+    internal static volatile string AuthTokenPrefix = "auth:token:";
 
     public Task<bool> HandleAsync(IMessageQueueReceiver receiver, MessageWrapper message)
     {

@@ -87,10 +87,10 @@ public class UserSession : IDisposable, IMessageQueueReceiver, ISessionUsable, I
         // ReceiverHandler.OnReceiveCompleted 는 구소켓 오류 시 Disconnect() → Dispose() 를 호출한다.
         // Dispose() 가 새 TcpClient 를 건드리지 못하도록 flag를 먼저 1로 세팅한다.
         Interlocked.Exchange(ref _disposedFlag, 1);
-        _receiver.Reset();   // 구소켓 명시적 종료 → IO 완료 콜백 즉시 큐잉
+        // _disposedFlag=1이 IOCP 콜백의 early return을 보장함
+        _receiver.Dispose();
+        _sender.Dispose();
         _client.Dispose();
-        // 1ms 대기: IOCP 스레드가 구 콜백을 처리하여 _disposedFlag=1 을 보고 bail-out 하도록 보장
-        await Task.Delay(1);
 
         var newClient = new TcpClient();
         await newClient.ConnectAsync(GameServerIp, GameServerPort);
