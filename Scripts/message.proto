@@ -17,6 +17,8 @@ message MessageWrapper {
 		GameOverResponse game_over_response = 31;
 		MoveRequest move_request = 40;
 		MoveResponse move_response = 41;
+		GameConnectRequest game_connect_request = 50;
+		GameConnectResponse game_connect_response = 51;
 	}
 }
 
@@ -52,6 +54,19 @@ message LoginRequest {
 // 로그인 응답 (서버 → 클라이언트)
 // error_code: 0=성공, 1=인증실패, 2=밴, 3=서버오류, 4=횟수제한
 message LoginResponse {
+    bool success = 1;
+    int32 error_code = 2;
+    string auth_token = 3;
+}
+
+// 게임서버 접속 요청 (클라이언트 → 게임서버)
+message GameConnectRequest {
+    string auth_token = 1;
+}
+
+// 게임서버 접속 응답 (게임서버 → 클라이언트)
+// error_code: 0=성공, 1=토큰무효, 2=서버오류
+message GameConnectResponse {
     bool success = 1;
     int32 error_code = 2;
 }

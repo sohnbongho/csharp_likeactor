@@ -1,3 +1,4 @@
+using DummyClient.Session;
 using Microsoft.Extensions.Configuration;
 
 namespace DummyClient;
@@ -22,11 +23,16 @@ public class Program
 
         await Task.Delay(2000);
 
-        var serverIp        = configuration["Client:ServerIp"] ?? "127.0.0.1";
-        var serverPort      = int.Parse(configuration["Client:ServerPort"] ?? "9000");
-        var maxClientCount  = int.Parse(configuration["Client:MaxClientCount"] ?? "1000");
+        var loginIp   = configuration["Client:LoginServer:Ip"] ?? "127.0.0.1";
+        var loginPort = int.Parse(configuration["Client:LoginServer:Port"] ?? "9000");
+        var gameIp    = configuration["Client:GameServer:Ip"] ?? "127.0.0.1";
+        var gamePort  = int.Parse(configuration["Client:GameServer:Port"] ?? "9001");
+        var maxClientCount = int.Parse(configuration["Client:MaxClientCount"] ?? "1000");
 
-        var tcpDummyClient = new TcpDummyClient(serverIp, serverPort, maxClientCount);
+        UserSession.GameServerIp = gameIp;
+        UserSession.GameServerPort = gamePort;
+
+        var tcpDummyClient = new TcpDummyClient(loginIp, loginPort, maxClientCount);
         tcpDummyClient.Init();
 
         await tcpDummyClient.StartAsync();

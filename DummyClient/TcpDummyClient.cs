@@ -12,6 +12,8 @@ public class TcpDummyClient
     private readonly UserObjectPoolManager _userObjectPoolManager;
     private readonly LobbyThreadManager _lobbyThreadManager;
     private readonly ManualResetEvent _shutdownEvent = new(false);
+    private readonly CancellationTokenSource _monitorCts = new();
+    private Task? _monitorTask;
     private readonly string _serverIp;
     private readonly int _serverPort;
     private readonly int _maxClientCount;
@@ -31,6 +33,7 @@ public class TcpDummyClient
     {
         _lobbyThreadManager.Start();
         _userObjectPoolManager.Init();
+        _monitorTask = Task.Run(() => MonitorAsync(_monitorCts.Token));
     }
 
     public async Task StartAsync()
@@ -103,6 +106,20 @@ public class TcpDummyClient
         }
     }
 
+    private async Task MonitorAsync(CancellationToken token)
+    {
+        while (!token.IsCancellationRequested)
+        {
+            try { await Task.Delay(10000, token); }
+            catch (OperationCanceledException) { break; }
+
+            var login = _userObjectPoolManager.LoginServerCount;
+            var game  = _userObjectPoolManager.GameServerCount;
+            var disc  = _userObjectPoolManager.DisconnectedCount;
+            _logger.Info(() => $"[모니터] 로그인서버: {login}명 | 게임서버: {game}명 | 연결끊김: {disc}명");
+        }
+    }
+
     public void Stop()
     {
         _logger.Info(() => $"Stop Server");
@@ -111,10 +128,11 @@ public class TcpDummyClient
             if (false == _connectedUsers.TryDequeue(out var userSession))
                 break;
 
-
             userSession.Disconnect();
         }
 
+        _monitorCts.Cancel();
+        _monitorTask?.GetAwaiter().GetResult();
         _lobbyThreadManager.StopAsync().GetAwaiter().GetResult();
         _shutdownEvent.Set();
     }

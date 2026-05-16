@@ -13,14 +13,24 @@ public class ConnectedResponseHandler : IRemoteMessageHandlerAsync
         if (receiver is not UserSession session)
             return Task.FromResult(true);
 
-        session.Send(new MessageWrapper
+        if (session.Phase == SessionPhase.GameServer)
         {
-            LoginRequest = new LoginRequest
+            session.Send(new MessageWrapper
             {
-                UserId = session.UserId,
-                PasswordHash = ByteString.CopyFrom(session.ClientHashBytes)
-            }
-        });
+                GameConnectRequest = new GameConnectRequest { AuthToken = session.AuthToken }
+            });
+        }
+        else
+        {
+            session.Send(new MessageWrapper
+            {
+                LoginRequest = new LoginRequest
+                {
+                    UserId = session.UserId,
+                    PasswordHash = ByteString.CopyFrom(session.ClientHashBytes)
+                }
+            });
+        }
 
         return Task.FromResult(true);
     }

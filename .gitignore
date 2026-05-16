@@ -51,3 +51,4 @@ Library/bin/*
 Library/obj/*
 /.claude/settings.local.json
 /Server/appsettings.json
+/.vs/Server

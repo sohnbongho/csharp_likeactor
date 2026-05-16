@@ -1,0 +1,19 @@
+using Library.AdminApi;
+using Microsoft.AspNetCore.Mvc;
+
+namespace LoginServer.AdminApi.Controllers;
+
+[ApiController]
+[Route("api/stats")]
+public class StatsController : ControllerBase
+{
+    private readonly ServerStats _stats;
+
+    public StatsController(ServerStats stats)
+    {
+        _stats = stats;
+    }
+
+    [HttpGet]
+    public ActionResult<StatsDto> Get() => Ok(_stats.Snapshot());
+}
