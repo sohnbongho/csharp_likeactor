@@ -36,9 +36,9 @@ dotnet build Server/Server.sln -c Release
 
 빌드 오류가 있으면 스스로 수정합니다. 수정해도 해결되지 않으면 사용자에게 보고합니다.
 
-### 5. 완료 보고
+### 5. 완료 보고 및 저장
 
-아래 형식으로 결과를 보고합니다.
+아래 형식으로 결과를 보고하고, `workspace/do/YYYYMMDD_<주제요약>.md` 에 저장합니다 (Bash: `mkdir -p workspace/do`).
 
 ```
 ## 구현 완료

@@ -65,8 +65,8 @@ Read, Glob, Grep, Bash(git diff/log)를 사용해 충분히 코드를 읽습니�
 
 ### 4. 파일 저장 및 출력
 
-- `.claude/review/` 폴더에 `YYYYMMDD_<대상요약>.md` 파일명으로 저장합니다
-- 저장 전 폴더가 없으면 생성합니다 (Bash: `mkdir -p .claude/review`)
+- `workspace/myreview/` 폴더에 `YYYYMMDD_<대상요약>.md` 파일명으로 저장합니다
+- 저장 전 폴더가 없으면 생성합니다 (Bash: `mkdir -p workspace/myreview`)
 - 리뷰 내용을 사용자에게 그대로 출력합니다
 
 ## 제약사항
