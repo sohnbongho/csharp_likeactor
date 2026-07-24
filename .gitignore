@@ -52,3 +52,12 @@ Library/obj/*
 /.claude/settings.local.json
 /Server/appsettings.json
 /.vs/Server
+GameServer/bin
+GameServer/obj
+LoginServer/bin
+SocketLibrary/obj
+LoginServer/obj
+GameServer/bin
+GameServer/obj
+LoginServer/obj
+SocketLibrary/obj
