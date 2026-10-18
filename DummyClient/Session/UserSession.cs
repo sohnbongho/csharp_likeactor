@@ -17,9 +17,10 @@ public enum SessionPhase { LoginServer, GameServer }
 public class UserSession : IDisposable, IMessageQueueReceiver, ISessionUsable, ITickable
 {
     private TcpClient _client;
+    private UserConnectionComponent? _connection;
     private static readonly IServerLogger _logger = ServerLoggerFactory.CreateLogger();
-    private SenderHandler _sender;
-    private ReceiverHandler _receiver;
+    private readonly SenderHandler _sender;
+    private readonly ReceiverHandler _receiver;
     private readonly Channel<IMessageQueue> _messageChannel;
     private readonly ulong _sessionId;
     private readonly UserObjectPoolManager _userManager;
@@ -57,17 +58,25 @@ public class UserSession : IDisposable, IMessageQueueReceiver, ISessionUsable, I
                 FullMode = BoundedChannelFullMode.DropWrite
             });
 
-        _receiver = new ReceiverHandler(this);
-        _sender = new SenderHandler();
+        _receiver = new ReceiverHandler(this, Disconnect);
+        _sender = new SenderHandler(Disconnect);
     }
 
     public async Task ConnectAsync(string host, int port)
     {
         await _client.ConnectAsync(host, port);
+        BindConnection(_client.Client);
+    }
 
-        var socket = _client.Client;
-        _sender.Bind(socket);
-        _receiver.Bind(socket);
+    private void BindConnection(Socket socket)
+    {
+        // 이전 연결 참조는 덮어쓴다. 구 소켓의 stale 콜백은 핸들러의 ReferenceEquals 가드가 차단한다.
+        _connection = new UserConnectionComponent(socket);
+        _sender.Bind(_connection);
+        _receiver.Bind(_connection);
+        // StartReceive 전에 flag를 해제해야 서버가 즉시 보내는
+        // 응답이 EnqueueMessageAsync 체크에서 드롭되지 않는다.
+        Interlocked.Exchange(ref _disposedFlag, 0);
         _receiver.StartReceive();
     }
 
@@ -84,27 +93,34 @@ public class UserSession : IDisposable, IMessageQueueReceiver, ISessionUsable, I
         Phase = SessionPhase.GameServer;
         _userManager.OnMovedToGameServer();
 
-        // ReceiverHandler.OnReceiveCompleted 는 구소켓 오류 시 Disconnect() → Dispose() 를 호출한다.
-        // Dispose() 가 새 TcpClient 를 건드리지 못하도록 flag를 먼저 1로 세팅한다.
+        // 구 소켓을 닫으면 핸들러가 Disconnect() → Dispose() 를 호출한다.
+        // 이것이 새 TcpClient를 건드리지 못하도록 flag를 먼저 1로 세팅해 Dispose를 no-op으로 만든다.
         Interlocked.Exchange(ref _disposedFlag, 1);
-        // _disposedFlag=1이 IOCP 콜백의 early return을 보장함
-        _receiver.Dispose();
-        _sender.Dispose();
+
+        // 로그인 서버 소켓은 Abort(RST)로 닫는다. Close(FIN)로 닫으면 클라이언트 측 임시 포트가
+        // TIME_WAIT(2분)에 묶여, 1만 명 × (로그인 + 게임) 연결이 Windows 동적 포트 범위를 넘겨
+        // 게임 서버 connect가 AddressAlreadyInUse로 실패한다.
+        _connection?.Abort();
+        _sender.Reset();
         _client.Dispose();
 
         var newClient = new TcpClient();
-        await newClient.ConnectAsync(GameServerIp, GameServerPort);
+        try
+        {
+            await newClient.ConnectAsync(GameServerIp, GameServerPort);
+        }
+        catch (Exception ex)
+        {
+            // flag가 이미 1이라 Dispose()는 no-op이므로 여기서 직접 종료 집계한다.
+            _logger.Warn(() => $"[게임서버 접속 실패] {UserId}: {ex.Message}");
+            newClient.Dispose();
+            _isAuthenticated = false;
+            _userManager.OnDisconnected(Phase);
+            return;
+        }
 
         _client = newClient;
-        _sender = new SenderHandler();
-        _receiver = new ReceiverHandler(this);
-        var socket = _client.Client;
-        _sender.Bind(socket);
-        _receiver.Bind(socket);
-        // StartReceive 전에 flag를 해제해야 GameServer가 즉시 보내는
-        // ConnectedResponse가 EnqueueMessageAsync 체크에서 드롭되지 않는다.
-        Interlocked.Exchange(ref _disposedFlag, 0);
-        _receiver.StartReceive();
+        BindConnection(_client.Client);
     }
 
     public async ValueTask TickAsync()
@@ -167,6 +183,8 @@ public class UserSession : IDisposable, IMessageQueueReceiver, ISessionUsable, I
         if (Interlocked.CompareExchange(ref _disposedFlag, 1, 0) != 0)
             return;
         _isAuthenticated = false;
+        _connection?.Close();
+        _sender.Reset();
         _client?.Dispose();
         _userManager.OnDisconnected(Phase);
     }

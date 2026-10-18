@@ -2,11 +2,6 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Git 정책
-
-이 프로젝트에서는 `git commit` 및 `git push` 를 **절대 실행하지 않는다**.
-코드 변경 후 commit/push가 필요하면 반드시 사용자에게 직접 하도록 안내한다.
-
 ## Language
 
 모든 응답은 중간 과정 설명 포함 한국어로 작성한다. 일본어·영어 혼용 금지.
@@ -40,8 +35,8 @@ There are no automated tests; `DummyClient` is the integration test — it conne
 ```
 Server.sln
 ├── SocketLibrary/ # Shared framework (Class Library, .NET 8) — namespace: Library.*
-├── LoginServer/   # Login server, port 9000, AdminApi port 9010 (Console App, .NET 8)
-├── GameServer/    # Game server, port 9001 (Console App, .NET 8)
+├── LoginServer/   # Login server, port 9100, AdminApi port 9110 (Console App, .NET 8)
+├── GameServer/    # Game server, port 9101 (Console App, .NET 8)
 ├── DummyClient/   # Integration test client (Console App, .NET 8)
 └── Scripts/       # Proto build script + message.proto
 ```
@@ -108,8 +103,8 @@ public class KeepAliveRequestHandler : IRemoteMessageHandlerAsync
 
 `SocketLibrary/ContInfo/SessionConstInfo.cs` — buffer size (8192), pool sizes, KeepAlive interval  
 `SocketLibrary/ContInfo/ThreadConstInfo.cs` — thread counts, tick interval (100 ms), worker delay (10 ms)  
-`LoginServer/appsettings.json` — port 9000, AdminApi port 9010, auth token TTL (30s)  
-`GameServer/appsettings.json` — port 9001, Redis auth token key prefix
+`LoginServer/appsettings.json` — port 9100, AdminApi port 9110, auth token TTL (30s)  
+`GameServer/appsettings.json` — port 9101, Redis auth token key prefix
 
 ### Logging Convention
 

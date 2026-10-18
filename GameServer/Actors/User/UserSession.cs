@@ -62,8 +62,8 @@ public class UserSession : IDisposable, ITickable, IMessageQueueReceiver, ISessi
             });
 
         _timerScheduleManager = new TimerScheduleManager();
-        _receiver = new ReceiverHandler(this);
-        _sender = new SenderHandler();
+        _receiver = new ReceiverHandler(this, Disconnect);
+        _sender = new SenderHandler(Disconnect);
     }
 
     public void Reinitialize(ulong sessionId)
@@ -79,17 +79,17 @@ public class UserSession : IDisposable, ITickable, IMessageQueueReceiver, ISessi
         }
 
         _timerScheduleManager.Reset();
-        _receiver.Reset();
         _sender.Reset();
         Volatile.Write(ref _disposedFlag, 0);
     }
 
     public void Bind(Socket socket)
     {
-        Volatile.Write(ref _disposedFlag, 0);
+        // 이전 연결 참조는 덮어쓴다. 구 소켓의 stale 콜백은 핸들러의 ReferenceEquals 가드가 차단한다.
         _userConnection = new UserConnectionComponent(socket);
-        _sender.Bind(_userConnection.Socket, Disconnect);
-        _receiver.Bind(_userConnection.Socket);
+        _sender.Bind(_userConnection);
+        _receiver.Bind(_userConnection);
+        Volatile.Write(ref _disposedFlag, 0);
         _receiver.StartReceive();
     }
 
@@ -98,20 +98,19 @@ public class UserSession : IDisposable, ITickable, IMessageQueueReceiver, ISessi
         if (Interlocked.CompareExchange(ref _disposedFlag, 1, 0) != 0)
             return;
 
+        // 1) 소켓 닫기. 이후 pending ReceiveAsync/SendAsync는 오류로 완료되고
+        //    핸들러가 Disconnect()를 다시 부르지만 위 CAS에서 즉시 반환된다.
+        _userConnection?.Close();
+
+        // 2) 도메인 정리
         if (AccountData != null)
         {
             _sqlWorkerManager.Enqueue(new LogoutSqlRequest(AccountData.AccountId));
             _userManager.UnregisterAuthenticatedSession(AccountData.UserId, this);
         }
 
-        if (_userConnection != null)
-        {
-            _userConnection.Dispose();
-            _userConnection = null;
-        }
-
+        // 3) 핸들러/타이머 자기 상태 초기화 (소켓 무관)
         _timerScheduleManager.Reset();
-        _receiver.Reset();
         _sender.Reset();
 
         _userManager.RemoveUser(this);
