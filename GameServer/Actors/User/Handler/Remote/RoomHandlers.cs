@@ -24,7 +24,36 @@ public class RoomCreateRequestHandler : IRemoteMessageHandler
         if (string.IsNullOrEmpty(heroId)) heroId = RoomManager.Instance.Data.DefaultHeroId;
 
         var room = RoomManager.Instance.Create();
-        room.Enqueue(r => r.Join(session, heroId, isCreate: true));
+        room.Enqueue(r => r.Join(session, heroId, Room.JoinMode.Create));
+        return true;
+    }
+}
+
+// 맵 위치(월드)로 입장: 그 월드의 방이 없으면 만들고 있으면 참가한다. 초대 코드가 필요 없다.
+[RemoteMessageHandlerAttribute(MessageWrapper.PayloadOneofCase.RoomEnterRequest)]
+public class RoomEnterRequestHandler : IRemoteMessageHandler
+{
+    public bool Handle(IMessageQueueReceiver receiver, MessageWrapper message)
+    {
+        if (receiver is not UserSession session || session.AccountData == null) return true;
+
+        var req = message.RoomEnterRequest;
+        if (session.Room != null)
+        {
+            session.Send(new MessageWrapper { RoomEnterResponse = new RoomEnterResponse { Success = false, ErrorCode = 4 } });
+            return true;
+        }
+
+        var worldId = (req.WorldId ?? "").Trim();
+        if (worldId == "")
+        {
+            session.Send(new MessageWrapper { RoomEnterResponse = new RoomEnterResponse { Success = false, ErrorCode = 6 } });
+            return true;
+        }
+
+        var heroId = string.IsNullOrEmpty(req.HeroId) ? RoomManager.Instance.Data.DefaultHeroId : req.HeroId;
+        var room = RoomManager.Instance.GetOrCreateForWorld(worldId);
+        room.Enqueue(r => r.Join(session, heroId, Room.JoinMode.EnterWorld));
         return true;
     }
 }
@@ -51,7 +80,7 @@ public class RoomJoinRequestHandler : IRemoteMessageHandler
         }
 
         var heroId = string.IsNullOrEmpty(req.HeroId) ? RoomManager.Instance.Data.DefaultHeroId : req.HeroId;
-        room.Enqueue(r => r.Join(session, heroId, isCreate: false));
+        room.Enqueue(r => r.Join(session, heroId, Room.JoinMode.JoinByCode));
         return true;
     }
 }

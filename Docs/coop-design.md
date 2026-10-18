@@ -27,22 +27,26 @@ AOI 밖으로 나간 개체는 `EnemyLeave`/`EnemyEnter` 이벤트 없이, 스�
 
 ### 3.1 방
 
+**입장은 맵 위치(월드) 기준이다.** 초대 코드 입력은 불편해서(2026-10-18 사용자 결정) 성(castle) id를 world_id로 보내면 서버가 그 월드의 방을 찾거나 만든다. 같은 성으로 들어온 사람들이 같은 방에 모인다. 코드 방식(RoomCreate/RoomJoin)은 프로토에 남아 있지만 UI는 쓰지 않는다.
+
 | 메시지 | 방향 | 내용 |
 |---|---|---|
-| `RoomCreateRequest { hero_id }` | C→S | 방 생성, 6자리 초대 코드 발급 |
-| `RoomCreateResponse { success, error_code, room }` | S→C | |
-| `RoomJoinRequest { room_code, hero_id }` | C→S | 코드로 참가 |
-| `RoomJoinResponse { success, error_code, room }` | S→C | error: 1=없음 2=정원 3=진행중 |
-| `RoomLeaveRequest {}` | C→S | 방 나가기 (방장이 나가면 다음 사람이 방장) |
-| `RoomReadyRequest { ready }` | C→S | 준비 토글 |
+| `RoomEnterRequest { world_id, hero_id }` | C→S | 월드 입장. 방이 없으면 생성(첫 입장자가 방장), 있으면 참가 |
+| `RoomEnterResponse { success, error_code, room }` | S→C | error: 2=정원 초과 4=이미 방에 있음 5=장수 없음 6=서버오류 |
+| `RoomLeaveRequest {}` / `RoomLeaveResponse { success }` | C→S / S→C | 방 나가기 (방장이 나가면 다음 사람이 방장) |
+| `RoomReadyRequest { ready }` | C→S | 준비 토글 (방장은 준비 없이 시작 가능) |
 | `RoomSetHeroRequest { hero_id }` | C→S | 장수 변경 |
-| `RoomSetStageRequest { stage_id }` | C→S | 방장만 |
-| `RoomStateNoti { room }` | S→C | 방 상태 변동 시 전원에게 |
-| `RoomStartRequest {}` | C→S | 방장만. 전원 준비 필요 |
-| `RoomStartResponse { success, error_code }` | S→C | |
-| `BattleStartNoti { stage_id, my_slot, tick_rate, snapshot_rate, players[] }` | S→C | 전투 시작. players: slot, user_id, display_name, hero_id, entity_id |
+| `RoomSetStageRequest { stage_id, castle_id }` | C→S | 방장만. 기본값은 stages.json 첫 스테이지 |
+| `RoomStateNoti { room }` | S→C | 방 상태 변동 시 전원에게 (참가/퇴장/준비/장수/스테이지/전투 시작·종료) |
+| `RoomStartRequest {}` / `RoomStartResponse { success, error_code }` | C→S / S→C | 방장만. error: 1=방장 아님 2=준비 안 된 인원 3=스테이지 없음 4=진행 중 |
+| `BattleStartNoti { stage_id, my_slot, tick_rate, snapshot_rate, players[], countdown_ms, castle_id }` | S→C | 전투 시작. countdown_ms 뒤 시뮬 시작 |
+| `RoomCreateRequest/Response`, `RoomJoinRequest/Response` | | 초대 코드 방식(미사용, 호환용) |
 
-`RoomInfo { room_code, host_slot, stage_id, members[] }`, `RoomMember { slot, user_id, display_name, hero_id, ready }`
+`RoomInfo { room_code, host_slot, stage_id, members[], castle_id, world_id, in_battle }`, `RoomMember { slot, user_id, display_name, hero_id, ready, in_battle }`
+
+- 전투 중인 월드에 들어오면 대기 멤버가 된다(`RoomMember.in_battle=false`): 스냅샷을 받지 않고 `BattleEndNoti`와 그 뒤의 `RoomStateNoti`를 받으며 다음 판부터 참여한다.
+- 정원(4명)이 찬 월드는 error 2. 같은 성에 방을 여러 개 두는 것은 필요해지면 추가한다.
+- 방의 마지막 멤버가 나가면 방이 사라지고, 다음 입장자가 새 방을 만든다.
 
 ### 3.2 전투
 
@@ -133,7 +137,7 @@ balance.json의 값은 현재 씬/프리팹에 들어 있는 직렬화 값을 �
 | `GameServer/Battle/Sim/BattleWorld.cs` | 시뮬 본체: 스테이지/스폰, 적 추적·겹침·접촉·돌진·궁병 사격, 플레이어 이동·무적·재생, 투사체, 장판, 젬, 경험치·레벨업 선택지, 스냅샷 생성 |
 | `GameServer/Battle/Sim/WeaponSystem.cs` | 무기 9종 발동 규칙 (Arrow/Slash/Orbit 원본 그대로, 나머지는 범위·간격 규칙만) |
 | `GameServer/Battle/Sim/UpgradeGenerator.cs` | 레벨업 선택지 (유니티 UpgradeGenerator 이식) |
-| `GameServer/Rooms/` | `Room`(액터, 50 ms 틱, 명령 큐), `RoomManager`(초대 코드), `RoomThreadManager` |
+| `GameServer/Rooms/` | `Room`(액터, 50 ms 틱, 명령 큐), `RoomManager`(월드 id → 방, 초대 코드 → 방), `RoomThreadManager` |
 | `GameServer/Actors/User/Handler/Remote/RoomHandlers.cs`, `BattleHandlers.cs` | 세션 → 룸 명령 전달 |
 | `DummyClient --clients N --coop [방인원] [라운드]` | 자동 협동 전투 테스트 |
 

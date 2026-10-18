@@ -112,6 +112,7 @@ public class KeepAliveRequestHandler : IRemoteMessageHandlerAsync
 Design: `Docs/coop-design.md`. The server simulates the whole battle; Unity only renders snapshots and sends input.
 
 - `GameServer/Rooms/Room.cs` — room actor (`ITickable` on `RoomThreadManager`, 50 ms tick). Session threads only `Enqueue(Action<Room>)`; all state changes and sends happen on the room thread. Members are validated by `SessionId` because sessions are pooled and reused.
+- Players enter by map location: `RoomEnterRequest { world_id }` (a castle id) → `RoomManager.GetOrCreateForWorld`. Everyone who enters the same world shares one room; entering during a battle makes you a waiting member until the next round. Invite-code messages remain only for compatibility.
 - `GameServer/Battle/Sim/BattleWorld.cs` — the simulation (ported from Unity `EnemyManager`, `EnemySpawner`, `StageController`, `PlayerHealth`, `ExpGemManager`, `Weapon*`). `Step()` at 20 Hz, `BuildSnapshot(viewer)` at 10 Hz with an 18-unit area of interest. Events accumulate in `Events` until the room sends a snapshot.
 - `GameServer/Battle/Sim/WeaponSystem.cs`, `UpgradeGenerator.cs` — weapon rules and level-up choices. Keep formulas identical to the Unity originals; the client draws from events (`WeaponFire`, `AreaFx`, `ProjectileSpawn`) and never computes damage.
 - `GameServer/Battle/Data/GameDataStore.cs` — loads `Data/*.json` at startup; ids are Unity asset file names (`Enemy_Soldier`, `Weapon_Bow`, `Hero_LiuBei`, `Stage_YellowTurban`).

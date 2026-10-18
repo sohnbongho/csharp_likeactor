@@ -34,6 +34,7 @@ public sealed class Room : ITickable
         public string DisplayName = "";
         public string HeroId = "";
         public bool Ready;
+        public bool InBattle;   // 현재 판의 참가자인가 (전투 중 들어온 사람은 false, 다음 판부터)
 
         // 세션이 끊겨 풀로 돌아간 뒤 다른 유저가 재사용했으면 더 이상 이 멤버의 세션이 아니다
         public bool IsCurrent => Session.SessionId == SessionId;
@@ -60,16 +61,24 @@ public sealed class Room : ITickable
 
     public ulong RoomId { get; }
     public string Code { get; }
+    public string WorldId { get; }       // 맵 위치 기반 방이면 성 id, 초대 코드 방이면 ""
+    public bool IsClosed => Volatile.Read(ref _closedFlag) != 0;
     public ulong SessionId => RoomId; // ITickable 키
 
-    public Room(RoomManager manager, GameDataStore data, ulong roomId, string code)
+    private int _closedFlag;
+
+    public Room(RoomManager manager, GameDataStore data, ulong roomId, string code, string worldId)
     {
         _manager = manager;
         _data = data;
         RoomId = roomId;
         Code = code;
+        WorldId = worldId;
         _stageId = data.DefaultStageId;
+        _castleId = worldId; // 월드 방은 그 성을 전투 배경으로 쓴다 (방장이 RoomSetStageRequest로 바꿀 수 있음)
     }
+
+    public enum JoinMode { Create, JoinByCode, EnterWorld }
 
     // 다른 스레드에서 호출. 룸 스레드가 다음 틱에 실행한다.
     public void Enqueue(Action<Room> command) => _commands.Enqueue(command);
@@ -112,7 +121,7 @@ public sealed class Room : ITickable
         {
             foreach (var m in _members)
             {
-                if (m == null) continue;
+                if (m == null || !m.InBattle) continue;
                 var viewer = world.GetPlayer(SlotOf(m));
                 if (viewer == null) continue;
                 SendSnapshot(m, world.BuildSnapshot(viewer));
@@ -174,27 +183,41 @@ public sealed class Room : ITickable
         }
     }
 
-    // 방 생성자의 첫 참가(isCreate)와 코드 참가 모두 여기로 온다.
-    public void Join(UserSession session, string heroId, bool isCreate)
+    // 방 생성자의 첫 참가, 초대 코드 참가, 월드 입장이 모두 여기로 온다.
+    // 월드 입장은 전투 중에도 허용된다 (대기 멤버로 머물다 다음 판 참여). 코드 참가는 전투 중이면 거절.
+    public void Join(UserSession session, string heroId, JoinMode mode)
     {
+        if (_closed && mode == JoinMode.EnterWorld)
+        {
+            // 마지막 멤버가 나가 방이 닫히는 사이에 들어온 입장: 새 방으로 다시 보낸다
+            _manager.GetOrCreateForWorld(WorldId).Enqueue(r => r.Join(session, heroId, mode));
+            return;
+        }
+
         int error = 0;
         if (_closed) error = 1;
         else if (session.AccountData == null) error = 5;
         else if (session.Room != null || FindMember(session) != null) error = 4;
-        else if (_phase != Phase.Waiting) error = 3;
+        else if (_phase != Phase.Waiting && mode != JoinMode.EnterWorld) error = 3;
         else if (MemberCount >= MaxMembers) error = 2;
         else if (!_data.Heroes.ContainsKey(heroId)) error = 5;
 
         if (error != 0)
         {
-            // 생성 응답의 오류 코드: 1=이미 방에 있음 2=서버오류 3=장수 없음
-            int createError = error == 4 ? 1 : error == 5 ? 3 : 2;
-            if (isCreate)
-                session.Send(new MessageWrapper { RoomCreateResponse = new RoomCreateResponse { Success = false, ErrorCode = createError } });
-            else
-                session.Send(new MessageWrapper { RoomJoinResponse = new RoomJoinResponse { Success = false, ErrorCode = error } });
-
-            if (isCreate) Close();
+            switch (mode)
+            {
+                case JoinMode.Create:
+                    // 생성 응답의 오류 코드: 1=이미 방에 있음 2=서버오류 3=장수 없음
+                    session.Send(new MessageWrapper { RoomCreateResponse = new RoomCreateResponse { Success = false, ErrorCode = error == 4 ? 1 : error == 5 ? 3 : 2 } });
+                    Close();
+                    break;
+                case JoinMode.JoinByCode:
+                    session.Send(new MessageWrapper { RoomJoinResponse = new RoomJoinResponse { Success = false, ErrorCode = error } });
+                    break;
+                default:
+                    session.Send(new MessageWrapper { RoomEnterResponse = new RoomEnterResponse { Success = false, ErrorCode = error == 1 ? 6 : error } });
+                    break;
+            }
             return;
         }
 
@@ -212,10 +235,18 @@ public sealed class Room : ITickable
         session.AttachRoom(this, slot);
 
         var info = BuildInfo();
-        if (isCreate)
-            member.Send(new MessageWrapper { RoomCreateResponse = new RoomCreateResponse { Success = true, Room = info } });
-        else
-            member.Send(new MessageWrapper { RoomJoinResponse = new RoomJoinResponse { Success = true, Room = info } });
+        switch (mode)
+        {
+            case JoinMode.Create:
+                member.Send(new MessageWrapper { RoomCreateResponse = new RoomCreateResponse { Success = true, Room = info } });
+                break;
+            case JoinMode.JoinByCode:
+                member.Send(new MessageWrapper { RoomJoinResponse = new RoomJoinResponse { Success = true, Room = info } });
+                break;
+            default:
+                member.Send(new MessageWrapper { RoomEnterResponse = new RoomEnterResponse { Success = true, Room = info } });
+                break;
+        }
         BroadcastState(info, except: member);
 
         _logger.Info(() => $"[방 {Code}] 참가: {member.UserId} 슬롯 {slot} ({MemberCount}/{MaxMembers})");
@@ -247,7 +278,7 @@ public sealed class Room : ITickable
         if (_hostSlot == slot)
             _hostSlot = Array.FindIndex(_members, m => m != null);
 
-        if (_world != null)
+        if (_world != null && member.InBattle)
             _world.DisconnectPlayer(slot);
 
         BroadcastState(BuildInfo(), except: null);
@@ -325,6 +356,7 @@ public sealed class Room : ITickable
         {
             var m = _members[slot];
             if (m == null) continue;
+            m.InBattle = true;
             world.AddPlayer(slot, _data.Heroes[m.HeroId]);
             start.Players.Add(new BattlePlayerInit { Slot = slot, UserId = m.UserId, DisplayName = m.DisplayName, HeroId = m.HeroId });
         }
@@ -341,6 +373,7 @@ public sealed class Room : ITickable
             start.MySlot = SlotOf(m);
             m.Send(new MessageWrapper { BattleStartNoti = start.Clone() });
         }
+        BroadcastState(BuildInfo(), except: null);
 
         _logger.Info(() => $"[방 {Code}] 전투 시작: {_stageId}, {MemberCount}명");
     }
@@ -366,7 +399,8 @@ public sealed class Room : ITickable
             m.Send(new MessageWrapper { BattleEndNoti = end });
             m.Ready = false;
 
-            var p = world.GetPlayer(SlotOf(m));
+            var p = m.InBattle ? world.GetPlayer(SlotOf(m)) : null;
+            m.InBattle = false;
             if (p != null && m.IsCurrent && m.Session.AccountData != null)
             {
                 m.Session.EnqueueSqlRequest(new SaveScoreSqlRequest(
@@ -388,14 +422,14 @@ public sealed class Room : ITickable
     public void OnInput(UserSession session, BattleInputRequest input)
     {
         var member = FindMember(session);
-        if (member == null || _world == null) return;
+        if (member == null || !member.InBattle || _world == null) return;
         _world.SetInput(SlotOf(member), input.Seq, input.MoveX, input.MoveY, input.Skill);
     }
 
     public void OnUpgradeSelect(UserSession session, int choiceId, int index)
     {
         var member = FindMember(session);
-        if (member == null || _world == null) return;
+        if (member == null || !member.InBattle || _world == null) return;
         _world.SelectUpgrade(SlotOf(member), choiceId, index);
     }
 
@@ -403,12 +437,16 @@ public sealed class Room : ITickable
 
     private RoomInfo BuildInfo()
     {
-        var info = new RoomInfo { RoomCode = Code, HostSlot = _hostSlot, StageId = _stageId, CastleId = _castleId };
+        var info = new RoomInfo
+        {
+            RoomCode = Code, HostSlot = _hostSlot, StageId = _stageId, CastleId = _castleId,
+            WorldId = WorldId, InBattle = _phase != Phase.Waiting,
+        };
         for (int slot = 0; slot < MaxMembers; slot++)
         {
             var m = _members[slot];
             if (m == null) continue;
-            info.Members.Add(new RoomMember { Slot = slot, UserId = m.UserId, DisplayName = m.DisplayName, HeroId = m.HeroId, Ready = m.Ready });
+            info.Members.Add(new RoomMember { Slot = slot, UserId = m.UserId, DisplayName = m.DisplayName, HeroId = m.HeroId, Ready = m.Ready, InBattle = m.InBattle });
         }
         return info;
     }
@@ -426,6 +464,7 @@ public sealed class Room : ITickable
     {
         if (_closed) return;
         _closed = true;
+        Volatile.Write(ref _closedFlag, 1);
         _world = null;
         for (int i = 0; i < MaxMembers; i++)
         {

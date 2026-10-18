@@ -34,6 +34,8 @@ message MessageWrapper {
 		RoomStartRequest room_start_request = 70;
 		RoomStartResponse room_start_response = 71;
 		BattleStartNoti battle_start_noti = 72;
+		RoomEnterRequest room_enter_request = 73;
+		RoomEnterResponse room_enter_response = 74;
 
 		// ---- 협동 전투 ----
 		BattleInputRequest battle_input_request = 80;
@@ -133,6 +135,7 @@ message RoomMember {
     string display_name = 3;
     string hero_id = 4;      // 장수 에셋 id (예: Hero_Liubei)
     bool ready = 5;
+    bool in_battle = 6;      // 현재 판에 참여 중 (전투 중 들어온 사람은 false)
 }
 
 message RoomInfo {
@@ -141,6 +144,8 @@ message RoomInfo {
     string stage_id = 3;     // 스테이지 에셋 id
     repeated RoomMember members = 4;
     string castle_id = 5;    // 배경용 성 id (비면 평야)
+    string world_id = 6;     // 맵 위치(성) id. 같은 world_id로 입장한 플레이어는 같은 방에 모인다
+    bool in_battle = 7;      // 전투 진행 중이면 true (뒤늦게 들어온 사람은 대기)
 }
 
 // 방 생성 (클라이언트 → 게임서버)
@@ -150,6 +155,20 @@ message RoomCreateRequest {
 
 // error_code: 0=성공, 1=이미 방에 있음, 2=서버오류, 3=장수 없음
 message RoomCreateResponse {
+    bool success = 1;
+    int32 error_code = 2;
+    RoomInfo room = 3;
+}
+
+// 맵 위치(월드)로 입장. 그 월드의 방이 없으면 만들고, 있으면 참가한다.
+// 전투 중인 방에 들어오면 대기 상태로 머물다가 다음 판에 참여한다.
+message RoomEnterRequest {
+    string world_id = 1;     // 성 id (예: Castle_Luoyang)
+    string hero_id = 2;
+}
+
+// error_code: 0=성공, 2=정원 초과, 4=이미 방에 있음, 5=장수 없음, 6=서버오류
+message RoomEnterResponse {
     bool success = 1;
     int32 error_code = 2;
     RoomInfo room = 3;

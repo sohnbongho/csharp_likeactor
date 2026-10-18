@@ -16,7 +16,8 @@ public sealed class RoomManager
 
     public static RoomManager Instance { get; private set; } = null!;
 
-    private readonly ConcurrentDictionary<string, Room> _rooms = new();
+    private readonly ConcurrentDictionary<string, Room> _rooms = new();      // 초대 코드 → 방
+    private readonly ConcurrentDictionary<string, Room> _byWorld = new();    // 월드 id → 방
     private readonly RoomThreadManager _threads;
     private readonly GameDataStore _data;
     private ulong _nextRoomId;
@@ -39,17 +40,31 @@ public sealed class RoomManager
         _rooms.Clear();
     }
 
-    public Room Create()
+    public Room Create() => Create(worldId: "");
+
+    private Room Create(string worldId)
     {
         while (true)
         {
             string code = GenerateCode();
-            var room = new Room(this, _data, Interlocked.Increment(ref _nextRoomId), code);
+            var room = new Room(this, _data, Interlocked.Increment(ref _nextRoomId), code, worldId);
             if (!_rooms.TryAdd(code, room))
                 continue;
             _threads.Add(room);
-            _logger.Info(() => $"방 생성: {code} (#{room.RoomId})");
+            _logger.Info(() => $"방 생성: {code} (#{room.RoomId}){(worldId != "" ? $" 월드={worldId}" : "")}");
             return room;
+        }
+    }
+
+    // 월드(맵 위치)의 방을 찾거나 만든다. 같은 월드로 들어오는 플레이어는 같은 방에 모인다.
+    // 방이 막 닫히는 중이면(마지막 멤버 퇴장) 새 방으로 바꿔 끼운다.
+    public Room GetOrCreateForWorld(string worldId)
+    {
+        while (true)
+        {
+            var room = _byWorld.GetOrAdd(worldId, id => Create(id));
+            if (!room.IsClosed) return room;
+            _byWorld.TryRemove(new KeyValuePair<string, Room>(worldId, room));
         }
     }
 
@@ -63,6 +78,8 @@ public sealed class RoomManager
     {
         if (_rooms.TryRemove(room.Code, out _))
         {
+            if (room.WorldId != "")
+                _byWorld.TryRemove(new KeyValuePair<string, Room>(room.WorldId, room));
             _threads.Remove(room);
             _logger.Info(() => $"방 제거: {room.Code} (#{room.RoomId})");
         }

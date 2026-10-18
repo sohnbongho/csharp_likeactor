@@ -44,23 +44,30 @@ public sealed class CoopDirector
             foreach (var s in group) s.ResetCoopState();
             var host = group[0];
 
-            // 1) 방 생성
-            host.Send(new MessageWrapper { RoomCreateRequest = new RoomCreateRequest { HeroId = HeroIds[0] } });
+            // 1) 월드(성) 입장: 그룹마다 다른 성으로 들어가면 서버가 성마다 방을 하나씩 만든다.
+            //    첫 사람이 먼저 들어가 방장이 되고, 나머지는 같은 성으로 들어가 합류한다.
+            string worldId = $"Castle_Test{groupIndex:D3}";
+            host.Send(new MessageWrapper { RoomEnterRequest = new RoomEnterRequest { WorldId = worldId, HeroId = HeroIds[0] } });
             if (!await WaitAsync(() => host.RoomError >= 0, 5000, token) || !host.InRoom)
             {
-                _logger.Warn(() => $"[협동 #{groupIndex}] 방 생성 실패/시간초과");
+                _logger.Warn(() => $"[협동 #{groupIndex}] 월드 입장 실패/시간초과 error={host.RoomError}");
                 return;
             }
+            host.IsHost = true;
 
-            // 2) 코드 참가
             for (int i = 1; i < group.Length; i++)
             {
                 var hero = HeroIds[i % HeroIds.Length];
-                group[i].Send(new MessageWrapper { RoomJoinRequest = new RoomJoinRequest { RoomCode = host.RoomCode, HeroId = hero } });
+                group[i].Send(new MessageWrapper { RoomEnterRequest = new RoomEnterRequest { WorldId = worldId, HeroId = hero } });
             }
             if (!await WaitAsync(() => group.All(s => s.RoomError >= 0), 5000, token) || group.Any(s => !s.InRoom))
             {
-                _logger.Warn(() => $"[협동 #{groupIndex}] 참가 실패: {string.Join(",", group.Where(s => !s.InRoom).Select(s => s.UserId))}");
+                _logger.Warn(() => $"[협동 #{groupIndex}] 합류 실패: {string.Join(",", group.Where(s => !s.InRoom).Select(s => $"{s.UserId}(error={s.RoomError})"))}");
+                return;
+            }
+            if (group.Skip(1).Any(s => s.RoomCode != host.RoomCode))
+            {
+                _logger.Warn(() => $"[협동 #{groupIndex}] 같은 월드인데 방이 다름: {string.Join(",", group.Select(s => s.RoomCode))}");
                 return;
             }
 

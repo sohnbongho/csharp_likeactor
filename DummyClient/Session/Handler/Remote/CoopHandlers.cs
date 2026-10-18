@@ -33,6 +33,31 @@ public class RoomCreateResponseHandler : IRemoteMessageHandler
     }
 }
 
+[RemoteMessageHandlerAttribute(MessageWrapper.PayloadOneofCase.RoomEnterResponse)]
+public class RoomEnterResponseHandler : IRemoteMessageHandler
+{
+    private static readonly IServerLogger _logger = ServerLoggerFactory.CreateLogger();
+
+    public bool Handle(IMessageQueueReceiver receiver, MessageWrapper message)
+    {
+        if (receiver is not UserSession session) return true;
+        var resp = message.RoomEnterResponse;
+        session.RoomError = resp.ErrorCode;
+        if (resp.Success)
+        {
+            session.RoomCode = resp.Room.RoomCode;
+            session.InRoom = true;
+            if (resp.Room.Members.Count == 1)
+                _logger.Info(() => $"[월드 입장] {session.UserId} 월드={resp.Room.WorldId} 코드={resp.Room.RoomCode} (첫 입장, 방장)");
+        }
+        else
+        {
+            _logger.Warn(() => $"[월드 입장 실패] {session.UserId} error={resp.ErrorCode}");
+        }
+        return true;
+    }
+}
+
 [RemoteMessageHandlerAttribute(MessageWrapper.PayloadOneofCase.RoomJoinResponse)]
 public class RoomJoinResponseHandler : IRemoteMessageHandler
 {
