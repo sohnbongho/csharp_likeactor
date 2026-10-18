@@ -35,6 +35,10 @@ public class TCPAcceptor : IDisposable
         _allowlistedIps = new HashSet<string> { "127.0.0.1", "::1" };
 
         _listener = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+        // 다른 프로세스가 같은 포트를 이미 잡고 있으면 바인드가 AddressAlreadyInUse로 즉시 실패하게 한다.
+        // Windows는 기본적으로 127.0.0.1:포트가 점유된 상태에서도 0.0.0.0:포트 바인드를 허용해
+        // 서버는 기동된 것처럼 보이지만 localhost 접속이 전부 그 프로세스로 가는 조용한 장애가 생긴다.
+        _listener.ExclusiveAddressUse = true;
         _listener.Bind(new IPEndPoint(IPAddress.Any, port));
         _listener.Listen(SessionConstInfo.MaxListenerBackLog);
     }
