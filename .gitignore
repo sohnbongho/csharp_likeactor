@@ -1,63 +1,16 @@
-# Prerequisites
-*.d
-
-# Compiled Object files
-*.slo
-*.lo
-*.o
-*.obj
-
-# Precompiled Headers
-*.gch
-*.pch
-
-# Linker files
-*.ilk
-
-# Debugger Files
+# .NET 빌드 산출물
+**/bin/
+**/obj/
 *.pdb
 
-# Compiled Dynamic libraries
-*.so
-*.dylib
-*.dll
+# protoc 도구는 bin 아래에 있지만 저장소에 포함한다
+!Scripts/protoc-34.1-win64/bin/
+!Scripts/protoc-34.1-win64/bin/protoc.exe
 
-# Fortran module files
-*.mod
-*.smod
+# IDE / 로컬 설정
+.vs/
+*.user
+*.suo
 
-# Compiled Static libraries
-*.lai
-*.la
-*.a
-*.lib
-
-# Executables
-*.exe
-*.out
-*.app
-
-# debug information files
-*.dwo
-
-Server/bin/*
-Server/obj/*
-Server/.vs/*
-
-DummyClient/bin/*
-DummyClient/obj/*
-
-Library/bin/*
-Library/obj/*
+# Claude Code 로컬 설정
 /.claude/settings.local.json
-/Server/appsettings.json
-/.vs/Server
-GameServer/bin
-GameServer/obj
-LoginServer/bin
-SocketLibrary/obj
-LoginServer/obj
-GameServer/bin
-GameServer/obj
-LoginServer/obj
-SocketLibrary/obj
