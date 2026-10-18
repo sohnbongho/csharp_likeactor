@@ -14,6 +14,7 @@ public sealed class PlayerEntity
     public const int FlagInvulnerable = 2;
     public const int FlagMoving = 4;
     public const int FlagSkillInvulnerable = 8;
+    public const int FlagChoosing = 64;
 
     public int Slot;
     public HeroDef Hero = null!;
@@ -30,6 +31,8 @@ public sealed class PlayerEntity
     public float InvulnTimer;
     public float SkillInvulnTimer;
     public float RegenAccumulator;
+    public float ReviveTimer;      // 사망 중 자동 부활까지 남은 시간
+    public bool Choosing;          // 레벨업 선택 중: 정지·무적, 적 표적에서 제외
 
     public int Level = 1;
     public int Exp;
@@ -50,8 +53,9 @@ public sealed class PlayerEntity
     public float RegenPerSecond;
 
     public float MaxHp(BalanceDef b) => b.PlayerMaxHp + MaxHpBonus;
-    public bool CanTakeContactDamage => !IsDead && InvulnTimer <= 0f && SkillInvulnTimer <= 0f;
-    public bool IsTargetable => Connected && !IsDead;
+    public bool CanTakeContactDamage => !IsDead && !Choosing && InvulnTimer <= 0f && SkillInvulnTimer <= 0f;
+    public bool IsTargetable => Connected && !IsDead && !Choosing;
+    public bool IsAlive => Connected && !IsDead;
 
     public int Flags
     {
@@ -62,6 +66,7 @@ public sealed class PlayerEntity
             if (InvulnTimer > 0f) f |= FlagInvulnerable;
             if (Moving) f |= FlagMoving;
             if (SkillInvulnTimer > 0f) f |= FlagSkillInvulnerable;
+            if (Choosing) f |= FlagChoosing;
             return f;
         }
     }

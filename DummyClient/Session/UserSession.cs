@@ -57,6 +57,7 @@ public class UserSession : IDisposable, IMessageQueueReceiver, ISessionUsable, I
     public int LastHp;
     public int LastKills;
     public int ChoiceCount;
+    public int ReviveCount;
     public long SnapshotBytes;
     private float _walkX, _walkY;
     private float _walkRemaining;
@@ -218,6 +219,7 @@ public class UserSession : IDisposable, IMessageQueueReceiver, ISessionUsable, I
         LastHp = 0;
         LastKills = 0;
         ChoiceCount = 0;
+        ReviveCount = 0;
         SnapshotBytes = 0;
         _walkRemaining = 0f;
         _inputSeq = 0;

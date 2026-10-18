@@ -12,6 +12,13 @@ public class Program
             .AddJsonFile("appsettings.json", optional: false, reloadOnChange: false)
             .Build();
 
+        // 네트워크 없이 전투 시뮬 규칙만 검사
+        if (args.Contains("--simtest"))
+        {
+            Environment.Exit(Battle.Sim.SimSelfTest.Run(Path.Combine(AppContext.BaseDirectory, "Data")));
+            return;
+        }
+
         var port = int.Parse(configuration["Server:Port"] ?? "9001");
 
         var dbConfig = new DbConfig

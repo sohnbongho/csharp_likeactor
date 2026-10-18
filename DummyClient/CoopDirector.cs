@@ -115,7 +115,7 @@ public sealed class CoopDirector
                 var host = g[0];
                 if (!host.InBattle) continue;
                 if (shown++ >= 3) break; // 그룹이 많으면 앞 3개만
-                var members = string.Join(" | ", g.Select(s => $"s{s.MySlot} Lv{s.LastLevel} HP{s.LastHp} 킬{s.LastKills} 적{s.LastEnemyInView}"));
+                var members = string.Join(" | ", g.Select(s => $"s{s.MySlot} Lv{s.LastLevel} HP{s.LastHp} 킬{s.LastKills} 적{s.LastEnemyInView} 부활{s.ReviveCount}"));
                 _logger.Info(() => $"[협동 {host.RoomCode}] 틱={host.LastSnapshotTick} 스냅샷={host.SnapshotCount} 이벤트={host.EventCount} 선택={host.ChoiceCount} 수신={host.SnapshotBytes / 1024}KB | {members}");
             }
         }

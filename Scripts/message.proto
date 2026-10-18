@@ -254,7 +254,7 @@ message BattleInputRequest {
     bool skill = 4;
 }
 
-// flags: 1=사망 2=피격무적 4=이동중 8=스킬무적 16=공격버프 32=이동속도버프
+// flags: 1=사망 2=피격무적 4=이동중 8=스킬무적 16=공격버프 32=이동속도버프 64=레벨업 선택 중(정지·무적)
 message PlayerState {
     int32 slot = 1;
     sint32 x = 2;
@@ -269,6 +269,7 @@ message PlayerState {
     int32 kills = 11;
     int32 skill_cooldown_ms = 12;
     int32 last_input_seq = 13; // 서버가 마지막으로 반영한 BattleInputRequest.seq
+    int32 revive_ms = 14;      // 사망 중이면 자동 부활까지 남은 시간. 팀 부활 횟수가 없어 부활 못 하면 0 (관전)
 }
 
 // 병렬 packed 배열. flags: 1=기절 2=돌진예고 4=돌진중 8=사격예고 32=이동중
@@ -294,8 +295,9 @@ message StageState {
     int32 boss_id = 4;        // 0이면 없음
     int32 boss_hp_pct = 5;
     int32 enemy_count = 6;
-    bool paused = 7;          // 레벨업 선택 대기 중
-    repeated int32 paused_by_slots = 8; // 선택 중인 플레이어 슬롯
+    bool paused = 7;          // 항상 false (레벨업 선택 중에도 게임은 계속 돈다)
+    repeated int32 paused_by_slots = 8; // 레벨업 선택 중인 플레이어 슬롯 (그 사람만 정지·무적)
+    int32 revives_left = 9;   // 팀 공용 부활 횟수 (부활할 때마다 1 소모)
 }
 
 message EnemySpawnEvent {
@@ -379,6 +381,15 @@ message PlayerDiedEvent {
     int32 slot = 1;
 }
 
+// 자동 부활 (사망 10초 뒤, 팀 공용 부활 횟수 1 소모). 가장 가까운 생존 아군 옆에서 최대 체력의 50%로, 2초 무적.
+// 횟수가 0이고 접속 중인 전원이 죽어 있으면 전멸(BattleEndNoti). 횟수가 0인데 누군가 살아 있으면 죽은 사람은 관전
+message PlayerRevivedEvent {
+    int32 slot = 1;
+    sint32 x = 2;
+    sint32 y = 3;
+    int32 hp = 4;
+}
+
 message WaveChangedEvent {
     int32 number = 1;
     string name = 2;
@@ -429,6 +440,7 @@ message BattleEvent {
         StageEventEvent stage_event = 12;
         LoadoutChangedEvent loadout_changed = 13;
         AreaFxEvent area_fx = 14;
+        PlayerRevivedEvent player_revived = 15;
     }
 }
 
@@ -458,7 +470,7 @@ message UpgradeChoice {
     string evolved_weapon_id = 7;
 }
 
-// 레벨업한 플레이어에게만. 선택 대기 중 방 전체 일시정지, timeout_ms 후 자동 선택
+// 레벨업한 플레이어에게만. 선택하는 동안 그 플레이어만 정지·무적이고 게임은 계속 돈다. timeout_ms 후 자동 선택
 message LevelUpChoiceNoti {
     int32 choice_id = 1;
     repeated UpgradeChoice options = 2;

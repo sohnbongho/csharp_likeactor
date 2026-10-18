@@ -35,6 +35,8 @@ There are no automated tests; `DummyClient` is the integration test — it conne
 ```bash
 # co-op battle test: 4 clients per room, 1 round (both servers must be running)
 dotnet run --project DummyClient/DummyClient.csproj -- --clients 4 --coop 4 1
+# battle-rule self test without network (revive, level-up choice, wipe); exit code 0 = pass
+dotnet run --project GameServer/GameServer.csproj -- --simtest
 ```
 
 ## Project Structure

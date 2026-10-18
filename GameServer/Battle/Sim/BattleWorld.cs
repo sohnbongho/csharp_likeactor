@@ -15,6 +15,11 @@ public sealed class BattleWorld
     public const int ChoiceTimeoutMs = 15000;
     public const float AoiRadius = 18f;          // 플레이어별 관심 영역 반지름
     public const float RainDelaySeconds = 0.6f;  // 화살비 예고 시간
+    public const int TeamRevives = 3;            // 한 판의 팀 공용 부활 횟수
+    public const float ReviveSeconds = 10f;      // 사망 후 자동 부활까지
+    public const float ReviveHpRatio = 0.5f;     // 부활 시 체력 비율
+    public const float ReviveInvulnSeconds = 2f; // 부활 직후 무적
+    private const float ReviveOffset = 0.8f;     // 부활 위치: 아군에서 떨어지는 거리
 
     private readonly GameDataStore _data;
     private readonly BalanceDef _b;
@@ -42,7 +47,7 @@ public sealed class BattleWorld
     public float Elapsed { get; private set; }
     public bool Ended { get; private set; }
     public bool Cleared { get; private set; }
-    public bool Paused => _pendingChoices.Count > 0;
+    public int RevivesLeft { get; private set; } = TeamRevives;
 
     // 스테이지 진행
     private readonly List<WaveDef> _waves;
@@ -149,16 +154,11 @@ public sealed class BattleWorld
         if (Ended) return;
         Tick++;
 
-        if (Paused)
-        {
-            // 레벨업 선택 대기: 게임 시간은 멈추고 선택 제한 시간만 흐른다
-            StepChoiceTimeouts(TickSeconds);
-            return;
-        }
-
         float dt = TickSeconds;
         Elapsed += dt;
 
+        // 레벨업 선택 중인 플레이어만 정지·무적이고 게임은 계속 돈다 (2026-10-18 사용자 결정)
+        StepChoiceTimeouts(dt);
         StepStage(dt);
         StepPlayers(dt);
         StepEnemies(dt);
@@ -512,18 +512,41 @@ public sealed class BattleWorld
     {
         foreach (var p in Players)
         {
-            if (p.IsDead || !p.Connected)
+            if (!p.Connected)
             {
                 p.Moving = false;
                 continue;
             }
 
-            float speed = _b.PlayerMoveSpeed * p.MoveSpeedMultiplier;
-            Vector2 velocity = p.MoveInput * speed;
-            p.Pos += velocity * dt;
-            p.Moving = velocity.LengthSquared() > 0.0001f;
-            if (p.Moving) p.Facing = PickDirection(p.MoveInput, p.Facing);
+            if (p.IsDead)
+            {
+                p.Moving = false;
+                if (p.ReviveTimer > 0f)
+                {
+                    p.ReviveTimer -= dt;
+                    if (p.ReviveTimer <= 0f)
+                    {
+                        if (RevivesLeft > 0) Revive(p);
+                        else p.ReviveTimer = 0f; // 타이머 도중 횟수가 바닥남: 관전
+                    }
+                }
+                continue;
+            }
+
             p.SkillPressed = false; // 장수 스킬은 2차 범위
+
+            if (p.Choosing)
+            {
+                p.Moving = false; // 선택 중에는 제자리. 무적은 IsTargetable/CanTakeContactDamage가 처리
+            }
+            else
+            {
+                float speed = _b.PlayerMoveSpeed * p.MoveSpeedMultiplier;
+                Vector2 velocity = p.MoveInput * speed;
+                p.Pos += velocity * dt;
+                p.Moving = velocity.LengthSquared() > 0.0001f;
+                if (p.Moving) p.Facing = PickDirection(p.MoveInput, p.Facing);
+            }
 
             if (p.SkillInvulnTimer > 0f) p.SkillInvulnTimer -= dt;
             if (p.InvulnTimer > 0f) p.InvulnTimer -= dt;
@@ -580,8 +603,50 @@ public sealed class BattleWorld
         {
             p.IsDead = true;
             p.Moving = false;
+            // 팀 부활 횟수가 남아 있을 때만 카운트다운. 없으면 관전(revive_ms 0)
+            p.ReviveTimer = RevivesLeft > 0 ? ReviveSeconds : 0f;
+            p.MoveInput = Vector2.Zero;
             Events.Add(new BattleEvent { PlayerDied = new PlayerDiedEvent { Slot = p.Slot } });
         }
+    }
+
+    // 자동 부활: 팀 공용 횟수 1 소모. 가장 가까운 생존 아군 옆(없으면 제자리)에서 최대 체력의 절반으로, 잠시 무적
+    private void Revive(PlayerEntity p)
+    {
+        RevivesLeft--;
+        if (RevivesLeft <= 0)
+        {
+            // 마지막 횟수를 썼으면 기다리던 다른 사망자는 관전으로 전환
+            foreach (var other in Players)
+                if (other.IsDead && !ReferenceEquals(other, p)) other.ReviveTimer = 0f;
+        }
+
+        var ally = NearestAlivePlayer(p.Pos, p);
+        if (ally != null)
+        {
+            float a = (float)_rng.NextDouble() * MathF.PI * 2f;
+            p.Pos = ally.Pos + new Vector2(MathF.Cos(a), MathF.Sin(a)) * ReviveOffset;
+        }
+        p.IsDead = false;
+        p.Hp = MathF.Max(1f, MathF.Round(p.MaxHp(_b) * ReviveHpRatio));
+        p.InvulnTimer = ReviveInvulnSeconds;
+        p.ReviveTimer = 0f;
+        p.RegenAccumulator = 0f;
+        Events.Add(new BattleEvent { PlayerRevived = new PlayerRevivedEvent { Slot = p.Slot, X = Q(p.Pos.X), Y = Q(p.Pos.Y), Hp = (int)p.Hp } });
+        TryOfferChoice(p); // 죽어 있는 동안 쌓인 레벨업이 있으면 이어서 제시
+    }
+
+    private PlayerEntity? NearestAlivePlayer(Vector2 from, PlayerEntity except)
+    {
+        PlayerEntity? best = null;
+        float bestSqr = float.MaxValue;
+        foreach (var p in Players)
+        {
+            if (ReferenceEquals(p, except) || !p.IsAlive) continue;
+            float d = (p.Pos - from).LengthSquared();
+            if (d < bestSqr) { bestSqr = d; best = p; }
+        }
+        return best;
     }
 
     // PlayerStats.Recalculate 이식. 메타 강화는 서버 저장 연동 전까지 0.
@@ -709,7 +774,8 @@ public sealed class BattleWorld
 
     private void TryOfferChoice(PlayerEntity p)
     {
-        if (!p.Connected || p.IsDead) { _queuedLevelUps[p.Slot] = 0; return; }
+        if (!p.Connected) { _queuedLevelUps[p.Slot] = 0; return; }
+        if (p.IsDead) return; // 부활하면 이어서 제시한다
         if (_queuedLevelUps[p.Slot] <= 0 || _pendingChoices.ContainsKey(p.Slot)) return;
 
         _queuedLevelUps[p.Slot]--;
@@ -723,6 +789,8 @@ public sealed class BattleWorld
             RemainingSeconds = ChoiceTimeoutMs / 1000f,
         };
         _pendingChoices[p.Slot] = pending;
+        p.Choosing = true;
+        p.Moving = false;
 
         var noti = new LevelUpChoiceNoti { ChoiceId = pending.ChoiceId, TimeoutMs = ChoiceTimeoutMs };
         for (int i = 0; i < options.Count; i++)
@@ -742,6 +810,9 @@ public sealed class BattleWorld
         OnLevelUpChoice?.Invoke(p.Slot, noti);
     }
 
+    // 자체 검사용: 선택 대기 중인 choice_id (없으면 0)
+    public int PendingChoiceId(int slot) => _pendingChoices.TryGetValue(slot, out var p) ? p.ChoiceId : 0;
+
     public bool SelectUpgrade(int slot, int choiceId, int index)
     {
         var p = GetPlayer(slot);
@@ -755,6 +826,7 @@ public sealed class BattleWorld
     private void ResolveChoice(PlayerEntity p, PendingChoice pending, int index)
     {
         _pendingChoices.Remove(p.Slot);
+        p.Choosing = false;
         pending.Options[index].Apply();
         TryOfferChoice(p);
     }
@@ -890,7 +962,7 @@ public sealed class BattleWorld
     {
         foreach (var p in Players)
         {
-            if (p.IsDead || !p.Connected) continue;
+            if (p.IsDead || !p.Connected || p.Choosing) continue;
             foreach (var w in p.Weapons)
                 WeaponSystem.Step(this, p, w, dt);
         }
@@ -1079,14 +1151,22 @@ public sealed class BattleWorld
 
     // ───────────────────────── 종료 ─────────────────────────
 
+    // 전멸: 팀 부활 횟수가 0이고 접속 중인 플레이어가 전원 죽어 있을 때.
+    // 횟수가 남아 있으면 전원이 죽어 있어도(혼자 플레이 포함) 부활을 기다린다.
     private void CheckEnd()
     {
         if (Ended) return;
-        if (!AnyTargetablePlayer())
+        bool anyConnected = false;
+        foreach (var p in Players)
         {
-            Ended = true;
-            Cleared = false;
+            if (!p.Connected) continue;
+            anyConnected = true;
+            if (!p.IsDead) return;
         }
+        if (anyConnected && RevivesLeft > 0) return; // 전원 사망이지만 부활 횟수가 남아 있음
+        // anyConnected == false: 참가자 전원 이탈. 룸이 곧 닫지만 대기 멤버만 남은 경우를 위해 여기서도 끝낸다
+        Ended = true;
+        Cleared = false;
     }
 
     public int ScoreOf(PlayerEntity p) => p.Kills * 10 + (p.Level - 1) * 100 + (int)Elapsed * 5;
@@ -1110,7 +1190,8 @@ public sealed class BattleWorld
                 BossId = _boss != null && _boss.Alive ? _boss.Id : 0,
                 BossHpPct = _boss != null && _boss.Alive ? (int)MathF.Round(_boss.Hp / _boss.Def.MaxHp * 100f) : 0,
                 EnemyCount = Enemies.Count,
-                Paused = Paused,
+                Paused = false,
+                RevivesLeft = RevivesLeft,
             },
         };
 
@@ -1124,6 +1205,7 @@ public sealed class BattleWorld
                 Level = p.Level, Exp = p.Exp, ExpToNext = ExpRequiredFor(p.Level),
                 Facing = (int)p.Facing, Flags = p.Flags, Kills = p.Kills,
                 SkillCooldownMs = 0, LastInputSeq = p.LastInputSeq,
+                ReviveMs = p.IsDead ? (int)(MathF.Max(0f, p.ReviveTimer) * 1000f) : 0,
             });
         }
         foreach (var slot in _pendingChoices.Keys)

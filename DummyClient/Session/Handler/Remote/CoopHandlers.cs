@@ -141,6 +141,11 @@ public class BattleSnapshotNotiHandler : IRemoteMessageHandler
         session.LastSnapshotTick = snap.Tick;
         session.SnapshotBytes += snap.CalculateSize();
         if (snap.Enemies != null) session.LastEnemyInView = snap.Enemies.Ids.Count;
+        foreach (var ev in snap.Events)
+        {
+            if (ev.BodyCase == BattleEvent.BodyOneofCase.PlayerRevived && ev.PlayerRevived.Slot == session.MySlot)
+                session.ReviveCount++;
+        }
         foreach (var p in snap.Players)
         {
             if (p.Slot != session.MySlot) continue;

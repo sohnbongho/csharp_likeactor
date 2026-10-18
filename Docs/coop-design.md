@@ -56,11 +56,13 @@ AOI 밖으로 나간 개체는 `EnemyLeave`/`EnemyEnter` 이벤트 없이, 스�
 |---|---|---|
 | `BattleInputRequest { seq, move_x, move_y, skill }` | C→S | 20 Hz. move는 길이 ≤ 1 |
 | `BattleSnapshotNoti { tick, elapsed_ms, players[], enemies, gems, events[], stage }` | S→C | 10 Hz |
-| `LevelUpChoiceNoti { choice_id, options[], timeout_ms }` | S→C | 레벨업한 플레이어에게만. 선택 대기 중 방 전체 일시정지(StageState.paused_by_slots), 15초 후 자동 선택 |
+| `LevelUpChoiceNoti { choice_id, options[], timeout_ms }` | S→C | 레벨업한 플레이어에게만. 선택하는 동안 그 사람만 정지·무적(PlayerState flags 64, StageState.paused_by_slots)이고 게임은 계속 돈다. 15초 후 자동 선택 |
 | `UpgradeSelectRequest { choice_id, index }` | C→S | |
 | `BattleEndNoti { cleared, survive_seconds, results[] }` | S→C | 전원 사망 또는 클리어. results: slot, kills, level, score, alive, hero_id, gold |
 
-- `PlayerState` flags: 1=사망 2=피격무적 4=이동중 8=스킬무적 16=공격버프 32=이동속도버프. facing 0=아래 1=위 2=왼쪽 3=오른쪽. `last_input_seq`는 서버가 마지막으로 반영한 입력 번호.
+- `PlayerState` flags: 1=사망 2=피격무적 4=이동중 8=스킬무적 16=공격버프 32=이동속도버프 64=레벨업 선택 중. facing 0=아래 1=위 2=왼쪽 3=오른쪽. `last_input_seq`는 서버가 마지막으로 반영한 입력 번호. `revive_ms`는 사망 중 자동 부활까지 남은 시간.
+- **사망과 부활** (2026-10-18 사용자 결정): 한 판에 **팀 공용 부활 횟수 3회**(`BattleWorld.TeamRevives`, `StageState.revives_left`). 죽으면 10초 뒤 자동 부활하며 1회 소모한다. 가장 가까운 생존 아군 옆(없으면 제자리)에서 최대 체력의 50%, 2초 무적. `PlayerDied` → (10초) → `PlayerRevived { slot, x, y, hp }`. 횟수가 남아 있으면 전원이 죽어 있어도(혼자 플레이 포함) 부활을 기다린다. 횟수가 0이면 죽은 사람은 관전(`revive_ms`=0)하고, 접속 중인 전원이 죽어 있을 때 전멸로 끝난다.
+- **레벨업 선택** (2026-10-18 사용자 결정): 선택하는 플레이어만 멈추고 무적이 되며 적 표적에서 빠진다. 다른 플레이어와 적은 계속 움직인다. 죽어 있는 동안 쌓인 레벨업은 부활 뒤 이어서 제시한다.
 - `EnemyStates { ids[], xs[], ys[], flags[] }` packed 병렬 배열. flags: 1=기절 2=돌진예고 4=돌진중 8=사격예고 32=이동중. 바라보는 방향은 클라가 가장 가까운 플레이어 쪽으로 계산.
 - `GemStates`는 끌려오는 중인 젬만. 바닥의 젬은 `GemSpawn` 위치에 고정.
 - 궤도 무기 각도는 전송하지 않는다. 서버/클라 모두 `angle = (elapsed_ms / 1000 × rotateSpeed) mod 360 + i × 360 / count`.
@@ -78,7 +80,7 @@ AOI 밖으로 나간 개체는 `EnemyLeave`/`EnemyEnter` 이벤트 없이, 스�
 | `ProjectileSpawn { id, owner_slot, weapon_id, x, y, dir_x, dir_y, speed, lifetime_ms, enemy_id }` | 클라가 외삽. 적 투사체는 owner_slot=-1, enemy_id |
 | `ProjectileDespawn { id, x, y }` | 명중/소멸 이펙트 |
 | `GemSpawn { id, x, y, value }`, `GemCollect { id, slot }` | |
-| `PlayerLevelUp { slot, level }`, `PlayerDied { slot }` | |
+| `PlayerLevelUp { slot, level }`, `PlayerDied { slot }`, `PlayerRevived { slot, x, y, hp }` | 부활 위치로 플레이어를 옮기고 체력을 맞춘다 |
 | `WaveChanged { number, name }`, `StageEvent { message, is_boss, boss_id }` | |
 | `LoadoutChanged { slot, weapons[{id, level}], passives[{id, level}] }` | 보유 무기/패시브 변경 (획득·레벨업·진화). 진화하면 기본 무기가 목록에서 빠진다 |
 | `AreaFx { slot, weapon_id, x, y, radius, duration_ms, kind }` | 0=불길 장판 1=화살비 예고 2=화살비 폭격 3=벼락 4=충격파 |
@@ -141,4 +143,4 @@ balance.json의 값은 현재 씬/프리팹에 들어 있는 직렬화 값을 �
 | `GameServer/Actors/User/Handler/Remote/RoomHandlers.cs`, `BattleHandlers.cs` | 세션 → 룸 명령 전달 |
 | `DummyClient --clients N --coop [방인원] [라운드]` | 자동 협동 전투 테스트 |
 
-1차에서 빠진 것: 장수 스킬(skill 입력은 받되 무시), 지형 충돌, 아군 장수, 메타 강화(서버 저장 연동 후), 재접속. 점수/골드 공식은 임시.
+1차에서 빠진 것: 장수 스킬(skill 입력은 받되 무시), 지형 충돌, 아군 장수, 메타 강화(서버 저장 연동 후), 재접속. 점수 공식은 임시, 골드는 유니티 RunRewards와 같음(배율 1).
