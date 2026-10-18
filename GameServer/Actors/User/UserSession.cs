@@ -10,6 +10,7 @@ using Library.Timer;
 using Library.Worker.Interface;
 using Messages;
 using GameServer.Actors.User.DbRequest.Sql;
+using GameServer.Rooms;
 using System.Diagnostics;
 using System.Net.Sockets;
 using System.Threading.Channels;
@@ -25,6 +26,11 @@ public class UserSession : IDisposable, ITickable, IMessageQueueReceiver, ISessi
 
     public UserAccountData? AccountData { get; private set; }
     public bool IsAuthenticated => AccountData != null;
+
+    // 참가 중인 협동 방. 룸 스레드가 Attach/Detach하고 세션 스레드가 읽으므로 volatile.
+    private volatile Room? _room;
+    public Room? Room => _room;
+    public int RoomSlot { get; private set; } = -1;
 
     private static readonly IServerLogger _logger = ServerLoggerFactory.CreateLogger();
 
@@ -71,6 +77,8 @@ public class UserSession : IDisposable, ITickable, IMessageQueueReceiver, ISessi
         _sessionId = sessionId;
         WorldId = 0;
         AccountData = null;
+        _room = null;
+        RoomSlot = -1;
         _lastKeepAliveReceivedAt = 0;
 
         while (_messageChannel.Reader.TryRead(out var msg))
@@ -103,6 +111,15 @@ public class UserSession : IDisposable, ITickable, IMessageQueueReceiver, ISessi
         _userConnection?.Close();
 
         // 2) 도메인 정리
+        // 방에 있었다면 룸 스레드에 퇴장을 알린다. 이 세션 객체는 곧 풀로 돌아가므로
+        // 룸은 SessionId를 비교해 재사용된 세션을 건드리지 않는다.
+        var room = _room;
+        if (room != null)
+        {
+            var self = this;
+            room.Enqueue(r => r.Leave(self, respond: false));
+        }
+
         if (AccountData != null)
         {
             _sqlWorkerManager.Enqueue(new LogoutSqlRequest(AccountData.AccountId));
@@ -126,6 +143,10 @@ public class UserSession : IDisposable, ITickable, IMessageQueueReceiver, ISessi
         {
             if (IsBlockedBeforeAuth(message))
                 return;
+
+            // 전투 중에는 입력이 KeepAlive 대신 활동 증거가 된다: 어떤 메시지든 받으면 타임아웃을 미룬다
+            if (message is RemoteReceiveMessage)
+                UpdateKeepAlive();
 
             await MessageQueueDispatcher.Instance.OnRecvMessageAsync(this, _sender, message);
             drained++;
@@ -169,6 +190,19 @@ public class UserSession : IDisposable, ITickable, IMessageQueueReceiver, ISessi
     }
 
     internal void SetWorldId(ulong worldId) => WorldId = worldId;
+
+    // 룸 스레드에서 호출
+    internal void AttachRoom(Room room, int slot)
+    {
+        RoomSlot = slot;
+        _room = room;
+    }
+
+    internal void DetachRoom()
+    {
+        _room = null;
+        RoomSlot = -1;
+    }
 
     internal void OnAuthenticated(UserAccountData data)
     {

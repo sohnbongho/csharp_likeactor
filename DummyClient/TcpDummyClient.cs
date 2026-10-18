@@ -20,6 +20,10 @@ public class TcpDummyClient
     private readonly ConcurrentQueue<UserSession> _connectedUsers = new();
     private UserSession? _playerSession;
 
+    // --coop 모드: 0이면 비활성. 세션을 이 인원씩 방으로 묶어 자동 전투한다.
+    public int CoopRoomSize { get; set; }
+    public int CoopRounds { get; set; } = 1;
+
     public TcpDummyClient(string serverIp, int serverPort, int maxClientCount)
     {
         _serverIp = serverIp;
@@ -56,6 +60,14 @@ public class TcpDummyClient
                     if (i + 1 < _maxClientCount)
                         await Task.Delay(1000);
                 }
+            }
+
+            if (CoopRoomSize > 0)
+            {
+                var director = new CoopDirector(CoopRoomSize, CoopRounds);
+                await director.RunAsync(_connectedUsers.ToList(), _monitorCts.Token);
+                Stop();
+                return;
             }
 
             if (_connectedUsers.TryPeek(out _playerSession))

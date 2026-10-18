@@ -1,0 +1,97 @@
+[
+  {
+    "id": "Hero_CaoCao",
+    "displayName": "조조",
+    "title": "난세의 간웅",
+    "maxHpBonus": 0,
+    "damageMultiplier": 1,
+    "moveSpeedMultiplier": 1.05,
+    "expMultiplier": 1.1,
+    "pickupRadiusMultiplier": 1,
+    "startingWeapon": "Weapon_YitianSword",
+    "skill": "Skill_Scheme",
+    "weapons": [
+      "Weapon_Crossbow",
+      "Weapon_FireZone",
+      "Weapon_Rain",
+      "Weapon_Knives",
+      "Weapon_Lightning"
+    ]
+  },
+  {
+    "id": "Hero_GuanYu",
+    "displayName": "관우",
+    "title": "미염공",
+    "maxHpBonus": 0,
+    "damageMultiplier": 1.15,
+    "moveSpeedMultiplier": 0.95,
+    "expMultiplier": 1,
+    "pickupRadiusMultiplier": 1,
+    "startingWeapon": "Weapon_GreenDragon",
+    "skill": "Skill_GreenDragon",
+    "weapons": [
+      "Weapon_Sword",
+      "Weapon_Thrust",
+      "Weapon_Lightning",
+      "Weapon_Nova",
+      "Weapon_Axe"
+    ]
+  },
+  {
+    "id": "Hero_LiuBei",
+    "displayName": "유비",
+    "title": "인덕의 군주",
+    "maxHpBonus": 20,
+    "damageMultiplier": 1,
+    "moveSpeedMultiplier": 1,
+    "expMultiplier": 1.2,
+    "pickupRadiusMultiplier": 1.3,
+    "startingWeapon": "Weapon_TwinSwords",
+    "skill": "Skill_Blessing",
+    "weapons": [
+      "Weapon_Bow",
+      "Weapon_Rain",
+      "Weapon_Nova",
+      "Weapon_Thrust",
+      "Weapon_Sword"
+    ]
+  },
+  {
+    "id": "Hero_LvBu",
+    "displayName": "여포",
+    "title": "천하무쌍",
+    "maxHpBonus": -20,
+    "damageMultiplier": 1.2,
+    "moveSpeedMultiplier": 1.1,
+    "expMultiplier": 1,
+    "pickupRadiusMultiplier": 1,
+    "startingWeapon": "Weapon_SkyPiercer",
+    "skill": "Skill_Warrior",
+    "weapons": [
+      "Weapon_Bow",
+      "Weapon_Thrust",
+      "Weapon_Axe",
+      "Weapon_Knives",
+      "Weapon_Sword"
+    ]
+  },
+  {
+    "id": "Hero_ZhangFei",
+    "displayName": "장비",
+    "title": "만인지적",
+    "maxHpBonus": 50,
+    "damageMultiplier": 1.05,
+    "moveSpeedMultiplier": 1,
+    "expMultiplier": 1,
+    "pickupRadiusMultiplier": 1,
+    "startingWeapon": "Weapon_SerpentSpear",
+    "skill": "Skill_Roar",
+    "weapons": [
+      "Weapon_Thrust",
+      "Weapon_Axe",
+      "Weapon_Nova",
+      "Weapon_Knives",
+      "Weapon_Sword"
+    ]
+  }
+]

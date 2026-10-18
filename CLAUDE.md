@@ -24,11 +24,18 @@ dotnet run --project DummyClient/DummyClient.csproj
 
 **Protobuf regeneration** (after editing `Scripts/message.proto`):
 ```bash
-# Linux (WSL) — Linux protoc binary required (protoc-27.3-linux-x86_64)
-cd Scripts && /tmp/protoc/bin/protoc -I=. --csharp_out=. message.proto && cp Message.cs ../SocketLibrary/DTO/Message.cs
+# Windows (Git Bash) — protoc 34.1 is checked in under Scripts/
+cd Scripts && ./protoc-34.1-win64/bin/protoc.exe -I=. --csharp_out=. message.proto && cp Message.cs ../SocketLibrary/DTO/Message.cs
 ```
+The Unity client (`../unity_samkuk`, handled by the `unity_samkuk` Claude session) copies the same `Message.cs` to `Assets/Scripts/Net/Proto/`.
+
+**Game data for co-op battles** (`GameServer/Data/*.json`, copied to the build output): exported from the Unity project's ScriptableObjects. Primary exporter is the Unity editor menu `Samkuk > Export Server Data`; `python Scripts/export_unity_data.py` is the editor-less fallback. Do not hand-edit the JSON.
 
 There are no automated tests; `DummyClient` is the integration test — it connects, logs in via LoginServer, connects to GameServer with auth token, and exchanges KeepAlive messages.
+```bash
+# co-op battle test: 4 clients per room, 1 round (both servers must be running)
+dotnet run --project DummyClient/DummyClient.csproj -- --clients 4 --coop 4 1
+```
 
 ## Project Structure
 
@@ -38,7 +45,8 @@ Server.sln
 ├── LoginServer/   # Login server, port 9100, AdminApi port 9110 (Console App, .NET 8)
 ├── GameServer/    # Game server, port 9101 (Console App, .NET 8)
 ├── DummyClient/   # Integration test client (Console App, .NET 8)
-└── Scripts/       # Proto build script + message.proto
+├── Scripts/       # protoc + message.proto + Unity data exporter
+└── Docs/          # Design docs (coop-design.md: server-authoritative co-op)
 ```
 
 ## Architecture
@@ -98,6 +106,16 @@ public class KeepAliveRequestHandler : IRemoteMessageHandlerAsync
 ```
 
 `InnerMessageHandlerAttribute` / `InnerMessageHandlerManager` follow the same pattern for server-internal messages.
+
+### Co-op Battle (server-authoritative)
+
+Design: `Docs/coop-design.md`. The server simulates the whole battle; Unity only renders snapshots and sends input.
+
+- `GameServer/Rooms/Room.cs` — room actor (`ITickable` on `RoomThreadManager`, 50 ms tick). Session threads only `Enqueue(Action<Room>)`; all state changes and sends happen on the room thread. Members are validated by `SessionId` because sessions are pooled and reused.
+- `GameServer/Battle/Sim/BattleWorld.cs` — the simulation (ported from Unity `EnemyManager`, `EnemySpawner`, `StageController`, `PlayerHealth`, `ExpGemManager`, `Weapon*`). `Step()` at 20 Hz, `BuildSnapshot(viewer)` at 10 Hz with an 18-unit area of interest. Events accumulate in `Events` until the room sends a snapshot.
+- `GameServer/Battle/Sim/WeaponSystem.cs`, `UpgradeGenerator.cs` — weapon rules and level-up choices. Keep formulas identical to the Unity originals; the client draws from events (`WeaponFire`, `AreaFx`, `ProjectileSpawn`) and never computes damage.
+- `GameServer/Battle/Data/GameDataStore.cs` — loads `Data/*.json` at startup; ids are Unity asset file names (`Enemy_Soldier`, `Weapon_Bow`, `Hero_LiuBei`, `Stage_YellowTurban`).
+- Snapshot bodies over 8190 bytes are split into several `BattleSnapshotNoti` with the same tick (see design doc 3.2).
 
 ### Key Configuration
 

@@ -8,6 +8,8 @@ using Library.Network;
 using Library.World;
 using GameServer.Actors;
 using GameServer.Actors.User.Handler.Remote;
+using GameServer.Battle.Data;
+using GameServer.Rooms;
 using System.Diagnostics;
 
 namespace GameServer;
@@ -24,6 +26,7 @@ public class TcpGameServer
     private readonly SqlWorkerManager _sqlWorkerManager;
     private readonly CacheWorkerManager _cacheWorkerManager;
     private readonly RedisBroadcastManager _broadcastManager;
+    private readonly RoomManager _roomManager;
     private readonly ManualResetEvent _shutdownEvent = new(false);
     private readonly CancellationTokenSource _monitorCts = new();
     private Task? _monitorTask;
@@ -41,6 +44,10 @@ public class TcpGameServer
         _broadcastManager = new RedisBroadcastManager(
             _cacheWorkerManager.GetSubscriber(), dbConfig.RedisBroadcastChannel);
 
+        // 협동 전투용 게임 데이터(유니티에서 내보낸 JSON)와 룸 관리자
+        var gameData = GameDataStore.Load(Path.Combine(AppContext.BaseDirectory, "Data"));
+        _roomManager = new RoomManager(gameData);
+
         GameConnectRequestHandler.AuthTokenPrefix = authTokenPrefix;
     }
 
@@ -55,6 +62,7 @@ public class TcpGameServer
 
         _lobbyThreadManager.Start();
         _worldThreadManager.Start();
+        _roomManager.Start();
         _userObjectPoolManager.Init();
         _acceptor.OnAccepted += socket =>
         {
@@ -80,6 +88,7 @@ public class TcpGameServer
 
         _lobbyThreadManager.StopAsync().GetAwaiter().GetResult();
         _worldThreadManager.StopAllAsync().GetAwaiter().GetResult();
+        _roomManager.StopAsync().GetAwaiter().GetResult();
 
         _broadcastManager.Unsubscribe();
         _sqlWorkerManager.StopAsync().GetAwaiter().GetResult();
@@ -113,11 +122,12 @@ public class TcpGameServer
                              / (elapsedSec * Environment.ProcessorCount) * 100.0;
             var memoryMb = process.WorkingSet64 / 1024.0 / 1024.0;
             var sessions = _userObjectPoolManager.ActiveSessionCount;
+            var rooms = _roomManager.RoomCount;
             var recvDelta = currRecv - prevRecv;
             var sentDelta = currSent - prevSent;
 
             _logger.Info(() =>
-                $"[모니터] 동접: {sessions}명 | CPU: {cpuPercent:F1}% | 메모리: {memoryMb:F0}MB | 수신: {recvDelta}패킷/10s | 송신: {sentDelta}패킷/10s");
+                $"[모니터] 동접: {sessions}명 | 방: {rooms}개 | CPU: {cpuPercent:F1}% | 메모리: {memoryMb:F0}MB | 수신: {recvDelta}패킷/10s | 송신: {sentDelta}패킷/10s");
 
             prevCpuTime = currCpuTime;
             prevTick = currTick;

@@ -1,0 +1,58 @@
+[
+  {
+    "id": "Passive_Armor",
+    "displayName": "철갑",
+    "description": "최대 체력이 20 증가하고 그만큼 회복합니다.",
+    "type": "MaxHp",
+    "valuePerLevel": 20,
+    "maxLevel": 5
+  },
+  {
+    "id": "Passive_Haste",
+    "displayName": "신속",
+    "description": "무기 쿨다운이 8% 감소합니다.",
+    "type": "Cooldown",
+    "valuePerLevel": 0.08,
+    "maxLevel": 5
+  },
+  {
+    "id": "Passive_Horse",
+    "displayName": "적토마",
+    "description": "이동 속도가 10% 증가합니다.",
+    "type": "MoveSpeed",
+    "valuePerLevel": 0.1,
+    "maxLevel": 5
+  },
+  {
+    "id": "Passive_Rations",
+    "displayName": "군량",
+    "description": "초당 체력이 0.5 회복됩니다.",
+    "type": "Regen",
+    "valuePerLevel": 0.5,
+    "maxLevel": 5
+  },
+  {
+    "id": "Passive_Strategy",
+    "displayName": "병법서",
+    "description": "모든 무기의 공격력이 15% 증가합니다.",
+    "type": "Damage",
+    "valuePerLevel": 0.15,
+    "maxLevel": 5
+  },
+  {
+    "id": "Passive_Virtue",
+    "displayName": "인덕",
+    "description": "경험치 획득 범위가 30% 증가합니다.",
+    "type": "PickupRadius",
+    "valuePerLevel": 0.3,
+    "maxLevel": 5
+  },
+  {
+    "id": "Passive_Wisdom",
+    "displayName": "지략",
+    "description": "경험치 획득량이 15% 증가합니다.",
+    "type": "ExpGain",
+    "valuePerLevel": 0.15,
+    "maxLevel": 5
+  }
+]

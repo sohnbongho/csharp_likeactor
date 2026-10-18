@@ -19,6 +19,28 @@ message MessageWrapper {
 		MoveResponse move_response = 41;
 		GameConnectRequest game_connect_request = 50;
 		GameConnectResponse game_connect_response = 51;
+
+		// ---- 협동 방 ----
+		RoomCreateRequest room_create_request = 60;
+		RoomCreateResponse room_create_response = 61;
+		RoomJoinRequest room_join_request = 62;
+		RoomJoinResponse room_join_response = 63;
+		RoomLeaveRequest room_leave_request = 64;
+		RoomLeaveResponse room_leave_response = 65;
+		RoomReadyRequest room_ready_request = 66;
+		RoomSetHeroRequest room_set_hero_request = 67;
+		RoomSetStageRequest room_set_stage_request = 68;
+		RoomStateNoti room_state_noti = 69;
+		RoomStartRequest room_start_request = 70;
+		RoomStartResponse room_start_response = 71;
+		BattleStartNoti battle_start_noti = 72;
+
+		// ---- 협동 전투 ----
+		BattleInputRequest battle_input_request = 80;
+		BattleSnapshotNoti battle_snapshot_noti = 81;
+		LevelUpChoiceNoti level_up_choice_noti = 82;
+		UpgradeSelectRequest upgrade_select_request = 83;
+		BattleEndNoti battle_end_noti = 84;
 	}
 }
 
@@ -99,4 +121,349 @@ message MoveResponse {
     bool success = 1;
     float x = 2;
     float y = 3;
+}
+
+// =====================================================================
+// 협동 방 (서버 권위 시뮬레이션). 설계: Docs/coop-design.md
+// =====================================================================
+
+message RoomMember {
+    int32 slot = 1;          // 0..3
+    string user_id = 2;
+    string display_name = 3;
+    string hero_id = 4;      // 장수 에셋 id (예: Hero_Liubei)
+    bool ready = 5;
+}
+
+message RoomInfo {
+    string room_code = 1;    // 6자리 초대 코드
+    int32 host_slot = 2;
+    string stage_id = 3;     // 스테이지 에셋 id
+    repeated RoomMember members = 4;
+    string castle_id = 5;    // 배경용 성 id (비면 평야)
+}
+
+// 방 생성 (클라이언트 → 게임서버)
+message RoomCreateRequest {
+    string hero_id = 1;
+}
+
+// error_code: 0=성공, 1=이미 방에 있음, 2=서버오류, 3=장수 없음
+message RoomCreateResponse {
+    bool success = 1;
+    int32 error_code = 2;
+    RoomInfo room = 3;
+}
+
+// 초대 코드로 참가
+message RoomJoinRequest {
+    string room_code = 1;
+    string hero_id = 2;
+}
+
+// error_code: 0=성공, 1=방 없음, 2=정원 초과, 3=진행 중, 4=이미 방에 있음, 5=장수 없음
+message RoomJoinResponse {
+    bool success = 1;
+    int32 error_code = 2;
+    RoomInfo room = 3;
+}
+
+message RoomLeaveRequest {
+}
+
+message RoomLeaveResponse {
+    bool success = 1;
+}
+
+message RoomReadyRequest {
+    bool ready = 1;
+}
+
+message RoomSetHeroRequest {
+    string hero_id = 1;
+}
+
+// 방장만
+message RoomSetStageRequest {
+    string stage_id = 1;
+    string castle_id = 2;
+}
+
+// 방 상태가 바뀔 때 전원에게
+message RoomStateNoti {
+    RoomInfo room = 1;
+}
+
+// 방장만. 전원 준비 상태여야 한다
+message RoomStartRequest {
+}
+
+// error_code: 0=성공, 1=방장 아님, 2=준비 안 된 인원 있음, 3=스테이지 없음, 4=이미 진행 중
+message RoomStartResponse {
+    bool success = 1;
+    int32 error_code = 2;
+}
+
+message BattlePlayerInit {
+    int32 slot = 1;
+    string user_id = 2;
+    string display_name = 3;
+    string hero_id = 4;
+}
+
+// 전투 시작. countdown_ms 뒤에 시뮬이 시작되고 BattleSnapshotNoti가 snapshot_rate Hz로 온다
+message BattleStartNoti {
+    string stage_id = 1;
+    int32 my_slot = 2;
+    int32 tick_rate = 3;       // 서버 시뮬 Hz (20)
+    int32 snapshot_rate = 4;   // 스냅샷 Hz (10)
+    repeated BattlePlayerInit players = 5;
+    int32 countdown_ms = 6;    // 3·2·1 표시 시간
+    string castle_id = 7;      // 배경용 성 id (비면 평야)
+}
+
+// =====================================================================
+// 협동 전투
+// 좌표는 sint32, 유닛 x 100 (cm). 방향(dir)은 x1000 정수.
+// =====================================================================
+
+// 클라이언트 → 서버, 20 Hz. move 길이는 1 이하 (서버가 클램프)
+message BattleInputRequest {
+    int32 seq = 1;
+    float move_x = 2;
+    float move_y = 3;
+    bool skill = 4;
+}
+
+// flags: 1=사망 2=피격무적 4=이동중 8=스킬무적 16=공격버프 32=이동속도버프
+message PlayerState {
+    int32 slot = 1;
+    sint32 x = 2;
+    sint32 y = 3;
+    int32 hp = 4;
+    int32 max_hp = 5;
+    int32 level = 6;
+    int32 exp = 7;
+    int32 exp_to_next = 8;
+    int32 facing = 9;         // 0=아래 1=위 2=왼쪽 3=오른쪽 (걷기 시트 행 순서)
+    int32 flags = 10;
+    int32 kills = 11;
+    int32 skill_cooldown_ms = 12;
+    int32 last_input_seq = 13; // 서버가 마지막으로 반영한 BattleInputRequest.seq
+}
+
+// 병렬 packed 배열. flags: 1=기절 2=돌진예고 4=돌진중 8=사격예고 32=이동중
+// (바라보는 방향은 클라가 가장 가까운 플레이어 쪽으로 계산한다)
+message EnemyStates {
+    repeated int32 ids = 1;
+    repeated sint32 xs = 2;
+    repeated sint32 ys = 3;
+    repeated int32 flags = 4;
+}
+
+// 끌려오는 중인 젬만. 바닥에 놓인 젬은 GemSpawn 위치에 고정
+message GemStates {
+    repeated int32 ids = 1;
+    repeated sint32 xs = 2;
+    repeated sint32 ys = 3;
+}
+
+message StageState {
+    int32 wave_number = 1;
+    string wave_name = 2;
+    int32 remaining_ms = 3;
+    int32 boss_id = 4;        // 0이면 없음
+    int32 boss_hp_pct = 5;
+    int32 enemy_count = 6;
+    bool paused = 7;          // 레벨업 선택 대기 중
+    repeated int32 paused_by_slots = 8; // 선택 중인 플레이어 슬롯
+}
+
+message EnemySpawnEvent {
+    int32 id = 1;
+    string enemy_id = 2;
+    sint32 x = 3;
+    sint32 y = 4;
+}
+
+// reason: 0=사망 1=재배치/정리. x,y는 소멸 위치 (사망 연출용)
+message EnemyDespawnEvent {
+    int32 id = 1;
+    int32 reason = 2;
+    sint32 x = 3;
+    sint32 y = 4;
+}
+
+// target_kind: 0=적 1=플레이어(id=slot). x,y는 피격 위치. hp_pct 0 = 사망
+message DamageEvent {
+    int32 target_kind = 1;
+    int32 id = 2;
+    int32 amount = 3;
+    int32 hp_pct = 4;
+    sint32 x = 5;
+    sint32 y = 6;
+}
+
+// 무기 발동 연출. index는 count 중 몇 번째. dir은 x1000
+// motion: 0=없음 1=내려베기 2=올려베기 3=찌르기 4=휩쓸기
+message WeaponFireEvent {
+    int32 slot = 1;
+    string weapon_id = 2;
+    sint32 x = 3;
+    sint32 y = 4;
+    sint32 dir_x = 5;
+    sint32 dir_y = 6;
+    int32 index = 7;
+    int32 motion = 8;
+}
+
+// 클라이언트가 외삽으로 이동시킨다. speed는 x100, dir은 x1000
+// 플레이어 투사체: owner_slot>=0, weapon_id. 적 투사체: owner_slot=-1, enemy_id
+message ProjectileSpawnEvent {
+    int32 id = 1;
+    int32 owner_slot = 2;
+    string weapon_id = 3;
+    sint32 x = 4;
+    sint32 y = 5;
+    sint32 dir_x = 6;
+    sint32 dir_y = 7;
+    int32 speed = 8;
+    int32 lifetime_ms = 9;
+    string enemy_id = 10;
+}
+
+// x,y는 소멸 위치 (명중 이펙트용)
+message ProjectileDespawnEvent {
+    int32 id = 1;
+    sint32 x = 2;
+    sint32 y = 3;
+}
+
+message GemSpawnEvent {
+    int32 id = 1;
+    sint32 x = 2;
+    sint32 y = 3;
+    int32 value = 4;
+}
+
+message GemCollectEvent {
+    int32 id = 1;
+    int32 slot = 2;
+}
+
+message PlayerLevelUpEvent {
+    int32 slot = 1;
+    int32 level = 2;
+}
+
+message PlayerDiedEvent {
+    int32 slot = 1;
+}
+
+message WaveChangedEvent {
+    int32 number = 1;
+    string name = 2;
+}
+
+message StageEventEvent {
+    string message = 1;
+    bool is_boss = 2;
+    int32 boss_id = 3;
+}
+
+message LoadoutEntry {
+    string id = 1;
+    int32 level = 2;
+}
+
+// 보유 무기/패시브가 바뀔 때 (획득, 레벨업, 진화). HUD 아이콘·진화 연출용
+message LoadoutChangedEvent {
+    int32 slot = 1;
+    repeated LoadoutEntry weapons = 2;
+    repeated LoadoutEntry passives = 3;
+}
+
+// 범위 연출. kind: 0=불길 장판 1=화살비 예고 2=화살비 폭격 3=벼락 4=충격파. radius x100
+message AreaFxEvent {
+    int32 slot = 1;
+    string weapon_id = 2;
+    sint32 x = 3;
+    sint32 y = 4;
+    int32 radius = 5;
+    int32 duration_ms = 6;
+    int32 kind = 7;
+}
+
+message BattleEvent {
+    oneof body {
+        EnemySpawnEvent enemy_spawn = 1;
+        EnemyDespawnEvent enemy_despawn = 2;
+        DamageEvent damage = 3;
+        WeaponFireEvent weapon_fire = 4;
+        ProjectileSpawnEvent projectile_spawn = 5;
+        ProjectileDespawnEvent projectile_despawn = 6;
+        GemSpawnEvent gem_spawn = 7;
+        GemCollectEvent gem_collect = 8;
+        PlayerLevelUpEvent player_level_up = 9;
+        PlayerDiedEvent player_died = 10;
+        WaveChangedEvent wave_changed = 11;
+        StageEventEvent stage_event = 12;
+        LoadoutChangedEvent loadout_changed = 13;
+        AreaFxEvent area_fx = 14;
+    }
+}
+
+// 서버 → 클라이언트, 10 Hz. 적/젬은 수신자의 관심 영역 안만 담긴다.
+// 이벤트가 많아 바디 8190바이트를 넘으면 같은 tick의 메시지를 여러 개로 나눠 보낸다
+// (첫 메시지에 상태 전부 + 이벤트 일부, 이어지는 메시지는 tick이 같고 players/enemies/gems가 비어 있으며 이벤트만 담는다).
+message BattleSnapshotNoti {
+    int32 tick = 1;
+    int32 elapsed_ms = 2;
+    repeated PlayerState players = 3;
+    EnemyStates enemies = 4;
+    GemStates gems = 5;
+    repeated BattleEvent events = 6;
+    StageState stage = 7;
+}
+
+// kind: 0=새 무기 1=무기 레벨업 2=패시브 3=체력회복 4=진화 (유니티 UpgradeKind 순서)
+// id: 새 무기/무기 레벨업=무기 id, 패시브=패시브 id, 진화=기본 무기 id (evolved_weapon_id가 결과)
+// level: 선택 후 레벨. 텍스트는 클라가 에셋에서 읽되 title/description도 참고용으로 보낸다
+message UpgradeChoice {
+    int32 index = 1;
+    int32 kind = 2;
+    string title = 3;
+    string description = 4;
+    string id = 5;
+    int32 level = 6;
+    string evolved_weapon_id = 7;
+}
+
+// 레벨업한 플레이어에게만. 선택 대기 중 방 전체 일시정지, timeout_ms 후 자동 선택
+message LevelUpChoiceNoti {
+    int32 choice_id = 1;
+    repeated UpgradeChoice options = 2;
+    int32 timeout_ms = 3;
+}
+
+message UpgradeSelectRequest {
+    int32 choice_id = 1;
+    int32 index = 2;
+}
+
+message BattlePlayerResult {
+    int32 slot = 1;
+    int32 kills = 2;
+    int32 level = 3;
+    int32 score = 4;
+    bool alive = 5;
+    string hero_id = 6;
+    int32 gold = 7;           // 서버가 계산한 보상
+}
+
+// 전원 사망 또는 클리어. 이후 방은 대기 상태로 돌아간다
+message BattleEndNoti {
+    bool cleared = 1;
+    int32 survive_seconds = 2;
+    repeated BattlePlayerResult results = 3;
 }

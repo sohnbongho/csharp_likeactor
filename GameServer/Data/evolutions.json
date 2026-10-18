@@ -1,0 +1,98 @@
+[
+  {
+    "id": "Evo_Axe",
+    "baseWeapon": "Weapon_Axe",
+    "requiredPassive": "Passive_Armor",
+    "evolvedWeapon": "Weapon_Evo_HeavenAxe",
+    "requiredLevel": 3,
+    "requiredPassiveLevel": 1
+  },
+  {
+    "id": "Evo_Bow",
+    "baseWeapon": "Weapon_Bow",
+    "requiredPassive": "Passive_Haste",
+    "evolvedWeapon": "Weapon_Evo_Repeater",
+    "requiredLevel": 3,
+    "requiredPassiveLevel": 1
+  },
+  {
+    "id": "Evo_FireZone",
+    "baseWeapon": "Weapon_FireZone",
+    "requiredPassive": "Passive_Wisdom",
+    "evolvedWeapon": "Weapon_Evo_RedCliff",
+    "requiredLevel": 3,
+    "requiredPassiveLevel": 1
+  },
+  {
+    "id": "Evo_GreenDragon",
+    "baseWeapon": "Weapon_GreenDragon",
+    "requiredPassive": "Passive_Horse",
+    "evolvedWeapon": "Weapon_Evo_MoonDragon",
+    "requiredLevel": 3,
+    "requiredPassiveLevel": 1
+  },
+  {
+    "id": "Evo_Lightning",
+    "baseWeapon": "Weapon_Lightning",
+    "requiredPassive": "Passive_Strategy",
+    "evolvedWeapon": "Weapon_Evo_HeavenThunder",
+    "requiredLevel": 3,
+    "requiredPassiveLevel": 1
+  },
+  {
+    "id": "Evo_Nova",
+    "baseWeapon": "Weapon_Nova",
+    "requiredPassive": "Passive_Virtue",
+    "evolvedWeapon": "Weapon_Evo_HeavenDrum",
+    "requiredLevel": 3,
+    "requiredPassiveLevel": 1
+  },
+  {
+    "id": "Evo_SerpentSpear",
+    "baseWeapon": "Weapon_SerpentSpear",
+    "requiredPassive": "Passive_Armor",
+    "evolvedWeapon": "Weapon_Evo_FlyingSpear",
+    "requiredLevel": 3,
+    "requiredPassiveLevel": 1
+  },
+  {
+    "id": "Evo_SkyPiercer",
+    "baseWeapon": "Weapon_SkyPiercer",
+    "requiredPassive": "Passive_Haste",
+    "evolvedWeapon": "Weapon_Evo_PeerlessHalberd",
+    "requiredLevel": 3,
+    "requiredPassiveLevel": 1
+  },
+  {
+    "id": "Evo_Sword",
+    "baseWeapon": "Weapon_Sword",
+    "requiredPassive": "Passive_Horse",
+    "evolvedWeapon": "Weapon_Evo_Zanmato",
+    "requiredLevel": 3,
+    "requiredPassiveLevel": 1
+  },
+  {
+    "id": "Evo_Thrust",
+    "baseWeapon": "Weapon_Thrust",
+    "requiredPassive": "Passive_Rations",
+    "evolvedWeapon": "Weapon_Evo_DragonSpear",
+    "requiredLevel": 3,
+    "requiredPassiveLevel": 1
+  },
+  {
+    "id": "Evo_TwinSwords",
+    "baseWeapon": "Weapon_TwinSwords",
+    "requiredPassive": "Passive_Virtue",
+    "evolvedWeapon": "Weapon_Evo_TwinDragons",
+    "requiredLevel": 3,
+    "requiredPassiveLevel": 1
+  },
+  {
+    "id": "Evo_YitianSword",
+    "baseWeapon": "Weapon_YitianSword",
+    "requiredPassive": "Passive_Strategy",
+    "evolvedWeapon": "Weapon_Evo_OverlordSword",
+    "requiredLevel": 3,
+    "requiredPassiveLevel": 1
+  }
+]

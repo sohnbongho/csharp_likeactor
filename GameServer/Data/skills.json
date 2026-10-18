@@ -1,0 +1,67 @@
+[
+  {
+    "id": "Skill_Blessing",
+    "displayName": "인덕의 가호",
+    "description": "체력을 40% 회복하고 경험치를 모두 끌어당긴다.",
+    "type": "Blessing",
+    "cooldown": 25,
+    "radius": 3,
+    "damage": 50,
+    "power": 0.4,
+    "power2": 0,
+    "duration": 3,
+    "tickInterval": 0.25
+  },
+  {
+    "id": "Skill_GreenDragon",
+    "displayName": "청룡참",
+    "description": "주변의 적에게 큰 피해를 준다.",
+    "type": "GreenDragonSlash",
+    "cooldown": 20,
+    "radius": 6,
+    "damage": 90,
+    "power": 0.4,
+    "power2": 0,
+    "duration": 3,
+    "tickInterval": 0.25
+  },
+  {
+    "id": "Skill_Roar",
+    "displayName": "일갈",
+    "description": "주변의 적을 2.5초간 기절시키고 피해를 준다.",
+    "type": "Roar",
+    "cooldown": 22,
+    "radius": 7,
+    "damage": 15,
+    "power": 0.4,
+    "power2": 0,
+    "duration": 2.5,
+    "tickInterval": 0.25
+  },
+  {
+    "id": "Skill_Scheme",
+    "displayName": "간웅의 책략",
+    "description": "8초간 공격력 +50%, 쿨다운 -30%.",
+    "type": "Scheme",
+    "cooldown": 30,
+    "radius": 5,
+    "damage": 50,
+    "power": 0.5,
+    "power2": 0.3,
+    "duration": 8,
+    "tickInterval": 0.25
+  },
+  {
+    "id": "Skill_Warrior",
+    "displayName": "무쌍난무",
+    "description": "3초간 무적, 이동속도 +50%, 주변에 지속 피해.",
+    "type": "Warrior",
+    "cooldown": 28,
+    "radius": 2.6,
+    "damage": 14,
+    "power": 0.5,
+    "power2": 0,
+    "duration": 3,
+    "tickInterval": 0.25
+  }
+]

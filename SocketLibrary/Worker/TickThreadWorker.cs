@@ -11,12 +11,15 @@ public class TickThreadWorker
     private static readonly IServerLogger _logger = ServerLoggerFactory.CreateLogger();
     private readonly ConcurrentDictionary<ulong, ITickable> _sessions = new();
     private readonly int _id;
+    private readonly int _tickMs;
     private readonly CancellationTokenSource _cts = new();
     private Task? _task;
 
-    public TickThreadWorker(int id)
+    // tickMs: 이 워커의 틱 간격. 기본은 세션용 100 ms, 전투 룸은 더 짧은 간격을 쓴다.
+    public TickThreadWorker(int id, int tickMs = ThreadConstInfo.TickMillSecond)
     {
         _id = id;
+        _tickMs = tickMs;
     }
 
     public void Start()
@@ -57,7 +60,7 @@ public class TickThreadWorker
                 }
             }
 
-            var remaining = TimeSpan.FromMilliseconds(ThreadConstInfo.TickMillSecond) - Stopwatch.GetElapsedTime(start);
+            var remaining = TimeSpan.FromMilliseconds(_tickMs) - Stopwatch.GetElapsedTime(start);
             if (remaining > TimeSpan.Zero)
             {
                 try { await Task.Delay(remaining, token); }

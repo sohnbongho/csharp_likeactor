@@ -38,6 +38,30 @@ public class UserSession : IDisposable, IMessageQueueReceiver, ISessionUsable, I
     public float Y { get; private set; }
     public string AuthToken { get; private set; } = string.Empty;
     public SessionPhase Phase { get; private set; } = SessionPhase.LoginServer;
+    public bool IsAuthenticated => _isAuthenticated;
+
+    // ── 협동 테스트 모드(--coop) 상태. 핸들러(세션 스레드)와 CoopDirector(별도 태스크)가 함께 읽으므로 volatile.
+    public volatile string RoomCode = string.Empty;
+    public volatile bool InRoom;
+    public volatile bool IsHost;
+    public volatile bool InBattle;
+    public volatile int RoomError = -1;      // RoomCreate/RoomJoin 응답 error_code (-1: 응답 전)
+    public volatile int StartError = -1;     // RoomStartResponse error_code (-1: 응답 전)
+    public volatile bool BattleEnded;
+    public int MySlot;
+    public int SnapshotCount;
+    public int EventCount;
+    public int LastSnapshotTick;
+    public int LastEnemyInView;
+    public int LastLevel;
+    public int LastHp;
+    public int LastKills;
+    public int ChoiceCount;
+    public long SnapshotBytes;
+    private float _walkX, _walkY;
+    private float _walkRemaining;
+    private int _inputSeq;
+    private static readonly Random _walkRandom = new();
 
     public static UserSession Of(TcpClient client, ulong sessionId, UserObjectPoolManager userObjectPoolManager)
     {
@@ -144,7 +168,59 @@ public class UserSession : IDisposable, IMessageQueueReceiver, ISessionUsable, I
                 _lastKeepAliveSentAt = now;
                 Send(new MessageWrapper { KeepAliveRequest = new KeepAliveRequest() });
             }
+
+            if (InBattle)
+                SendBattleInput(ThreadConstInfo.TickMillSecond / 1000f);
         }
+    }
+
+    // 전투 중 틱마다 입력 전송: 1~3초마다 방향을 바꾸는 무작위 걷기
+    private void SendBattleInput(float dt)
+    {
+        _walkRemaining -= dt;
+        if (_walkRemaining <= 0f)
+        {
+            lock (_walkRandom)
+            {
+                _walkRemaining = 1f + (float)_walkRandom.NextDouble() * 2f;
+                if (_walkRandom.NextDouble() < 0.2)
+                {
+                    _walkX = 0f; _walkY = 0f;
+                }
+                else
+                {
+                    double a = _walkRandom.NextDouble() * Math.PI * 2;
+                    _walkX = (float)Math.Cos(a); _walkY = (float)Math.Sin(a);
+                }
+            }
+        }
+        Send(new MessageWrapper
+        {
+            BattleInputRequest = new BattleInputRequest { Seq = ++_inputSeq, MoveX = _walkX, MoveY = _walkY, Skill = false }
+        });
+    }
+
+    public void ResetCoopState()
+    {
+        RoomCode = string.Empty;
+        InRoom = false;
+        IsHost = false;
+        InBattle = false;
+        RoomError = -1;
+        StartError = -1;
+        BattleEnded = false;
+        MySlot = -1;
+        SnapshotCount = 0;
+        EventCount = 0;
+        LastSnapshotTick = 0;
+        LastEnemyInView = 0;
+        LastLevel = 0;
+        LastHp = 0;
+        LastKills = 0;
+        ChoiceCount = 0;
+        SnapshotBytes = 0;
+        _walkRemaining = 0f;
+        _inputSeq = 0;
     }
 
     public ValueTask<bool> EnqueueMessageAsync(IMessageQueue message)

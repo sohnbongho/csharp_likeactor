@@ -1,0 +1,40 @@
+{
+  "weapons": [
+    "Weapon_Bow",
+    "Weapon_Sword",
+    "Weapon_Axe",
+    "Weapon_Thrust",
+    "Weapon_FireZone",
+    "Weapon_Lightning",
+    "Weapon_Rain",
+    "Weapon_Nova",
+    "Weapon_Crossbow",
+    "Weapon_Knives"
+  ],
+  "passives": [
+    "Passive_Strategy",
+    "Passive_Haste",
+    "Passive_Horse",
+    "Passive_Armor",
+    "Passive_Rations",
+    "Passive_Virtue",
+    "Passive_Wisdom"
+  ],
+  "evolutions": [
+    "Evo_Sword",
+    "Evo_Bow",
+    "Evo_Axe",
+    "Evo_FireZone",
+    "Evo_Lightning",
+    "Evo_Thrust",
+    "Evo_Nova",
+    "Evo_TwinSwords",
+    "Evo_GreenDragon",
+    "Evo_SerpentSpear",
+    "Evo_YitianSword",
+    "Evo_SkyPiercer"
+  ],
+  "weaponLevelUpWeight": 4,
+  "passiveWeight": 2,
+  "newWeaponWeight": 1
+}
